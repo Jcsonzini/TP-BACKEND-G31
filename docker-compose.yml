@@ -1,0 +1,56 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: tp-backend-g31-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: tpi_backend
+      TZ: America/Argentina/Buenos_Aires
+      PGTZ: America/Argentina/Buenos_Aires
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./postgres/init:/docker-entrypoint-initdb.d
+      - pgdata:/var/lib/postgresql/data
+
+  ms-catalogo:
+    build: ./ms-catalogo
+    container_name: ms-catalogo
+    ports:
+      - "8081:8081"
+    depends_on:
+      - postgres
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/tpi_backend
+
+  ms-solicitudes:
+    build: ./ms-solicitudes
+    container_name: ms-solicitudes
+    ports:
+      - "8082:8082"
+    depends_on:
+      - postgres
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/tpi_backend
+
+  ms-logistica:
+    build: ./ms-logistica
+    container_name: ms-logistica
+    ports:
+      - "8083:8083"
+    depends_on:
+      - postgres
+
+  ms-gateway:
+    build: ./ms-gateway
+    container_name: ms-gateway
+    ports:
+      - "8080:8080"
+    depends_on:
+      - ms-catalogo
+      - ms-solicitudes
+      - ms-logistica
+
+volumes:
+  pgdata:

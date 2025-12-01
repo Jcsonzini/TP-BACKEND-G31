@@ -1,0 +1,3 @@
+-- El contenedor ya crea la base definida en POSTGRES_DB (`tpi_backend`).
+-- Se deja el archivo para futuras semillas pero sin instrucciones que fallen
+-- cuando el volumen persiste datos.
