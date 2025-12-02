@@ -1,0 +1,37 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: ms-gateway
+
+  cloud:
+    gateway:
+      routes:
+        - id: ms-catalogo
+          uri: http://ms-catalogo:8081
+          predicates:
+            - Path=/ms-catalogo/**
+          filters:
+            - StripPrefix=1
+
+        - id: ms-solicitudes
+          uri: http://ms-solicitudes:8082
+          predicates:
+            - Path=/ms-solicitudes/**
+          filters:
+            - StripPrefix=1
+
+        - id: ms-logistica
+          uri: http://ms-logistica:8083
+          predicates:
+            - Path=/ms-logistica/**
+          filters:
+            - StripPrefix=1
+
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials
+
+logging:
+  level:
+    org.springframework.cloud.gateway: DEBUG
