@@ -4,11 +4,11 @@ import com.tpi.mscatalogo.dto.ContenedorDTO;
 import com.tpi.mscatalogo.service.ContenedorService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/contenedores")
@@ -51,9 +51,9 @@ public class ContenedorController {
     }
 
     @GetMapping
-    @Operation(summary = "Listar contenedores con paginación")
-    public ResponseEntity<Page<ContenedorDTO>> listar(Pageable pageable) {
-        Page<ContenedorDTO> page = contenedorService.listar(pageable);
-        return ResponseEntity.ok(page);
+    @Operation(summary = "Listar todos los contenedores")
+    public ResponseEntity<List<ContenedorDTO>> listar() {
+        List<ContenedorDTO> lista = contenedorService.listar();
+        return ResponseEntity.ok(lista);
     }
 }

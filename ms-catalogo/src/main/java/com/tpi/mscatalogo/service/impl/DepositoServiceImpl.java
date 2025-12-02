@@ -4,11 +4,10 @@ import com.tpi.mscatalogo.domain.Deposito;
 import com.tpi.mscatalogo.dto.DepositoDTO;
 import com.tpi.mscatalogo.repository.DepositoRepository;
 import com.tpi.mscatalogo.service.DepositoService;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.NoSuchElementException;
 
 @Service
@@ -65,9 +64,11 @@ public class DepositoServiceImpl implements DepositoService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<DepositoDTO> listar(Pageable pageable) {
-        return depositoRepository.findAll(pageable)
-                .map(this::toDTO);
+    public List<DepositoDTO> listar() {
+        return depositoRepository.findAll()
+                .stream()
+                .map(this::toDTO)
+                .toList();
     }
 
     // ---------- Mappers ----------

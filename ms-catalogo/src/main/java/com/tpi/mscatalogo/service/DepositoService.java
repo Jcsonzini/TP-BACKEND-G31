@@ -1,8 +1,7 @@
 package com.tpi.mscatalogo.service;
 
 import com.tpi.mscatalogo.dto.DepositoDTO;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
+import java.util.List;
 
 public interface DepositoService {
 
@@ -14,5 +13,5 @@ public interface DepositoService {
 
     DepositoDTO obtenerPorId(Long id);
 
-    Page<DepositoDTO> listar(Pageable pageable);
+    List<DepositoDTO> listar();
 }

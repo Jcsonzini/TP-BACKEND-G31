@@ -1,8 +1,7 @@
 package com.tpi.mscatalogo.service;
 
 import com.tpi.mscatalogo.dto.ContenedorDTO;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
+import java.util.List;
 
 public interface ContenedorService {
 
@@ -14,5 +13,5 @@ public interface ContenedorService {
 
     ContenedorDTO obtenerPorCodigo(String codigo);
 
-    Page<ContenedorDTO> listar(Pageable pageable);
+    List<ContenedorDTO> listar();
 }

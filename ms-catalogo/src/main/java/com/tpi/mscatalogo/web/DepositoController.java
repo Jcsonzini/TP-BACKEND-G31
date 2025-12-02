@@ -4,11 +4,11 @@ import com.tpi.mscatalogo.dto.DepositoDTO;
 import com.tpi.mscatalogo.service.DepositoService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/depositos")
@@ -51,9 +51,9 @@ public class DepositoController {
     }
 
     @GetMapping
-    @Operation(summary = "Listar depósitos con paginación")
-    public ResponseEntity<Page<DepositoDTO>> listar(Pageable pageable) {
-        Page<DepositoDTO> page = depositoService.listar(pageable);
-        return ResponseEntity.ok(page);
+    @Operation(summary = "Listar todos los depósitos")
+    public ResponseEntity<List<DepositoDTO>> listar() {
+        List<DepositoDTO> lista = depositoService.listar();
+        return ResponseEntity.ok(lista);
     }
 }

@@ -4,11 +4,10 @@ import com.tpi.mscatalogo.domain.Camion;
 import com.tpi.mscatalogo.dto.CamionDTO;
 import com.tpi.mscatalogo.repository.CamionRepository;
 import com.tpi.mscatalogo.service.CamionService;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.NoSuchElementException;
 
 @Service
@@ -69,9 +68,11 @@ public class CamionServiceImpl implements CamionService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<CamionDTO> listar(Pageable pageable) {
-        return camionRepository.findAll(pageable)
-                .map(this::toDTO);
+    public List<CamionDTO> listar() {
+        return camionRepository.findAll()
+                .stream()
+                .map(this::toDTO)
+                .toList();
     }
 
     // ---------- Mappers ----------

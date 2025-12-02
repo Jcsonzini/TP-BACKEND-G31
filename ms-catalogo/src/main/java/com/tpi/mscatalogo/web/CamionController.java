@@ -4,11 +4,11 @@ import com.tpi.mscatalogo.dto.CamionDTO;
 import com.tpi.mscatalogo.service.CamionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/camiones")
@@ -51,9 +51,9 @@ public class CamionController {
     }
 
     @GetMapping
-    @Operation(summary = "Listar camiones con paginación")
-    public ResponseEntity<Page<CamionDTO>> listar(Pageable pageable) {
-        Page<CamionDTO> page = camionService.listar(pageable);
-        return ResponseEntity.ok(page);
+    @Operation(summary = "Listar todos los camiones")
+    public ResponseEntity<List<CamionDTO>> listar() {
+        List<CamionDTO> lista = camionService.listar();
+        return ResponseEntity.ok(lista);
     }
 }

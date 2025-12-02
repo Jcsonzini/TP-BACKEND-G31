@@ -3,6 +3,8 @@ package com.tpi.mscatalogo.domain;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.math.BigDecimal;
+
 @Entity
 @Table(name = "depositos")
 @Getter
@@ -31,10 +33,10 @@ public class Deposito {
 
     // Coordenadas aproximadas para Google Maps
     @Column(precision = 9, scale = 6)
-    private Double latitud;
+    private BigDecimal latitud;
 
     @Column(precision = 9, scale = 6)
-    private Double longitud;
+    private BigDecimal longitud;
 
     // Capacidad de almacenaje en contenedores o m², según cómo lo definan
     private Integer capacidadMaxima;

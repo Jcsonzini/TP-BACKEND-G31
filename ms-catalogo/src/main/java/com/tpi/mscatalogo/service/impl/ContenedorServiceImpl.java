@@ -8,11 +8,10 @@ import com.tpi.mscatalogo.dto.ContenedorDTO;
 import com.tpi.mscatalogo.repository.ContenedorRepository;
 import com.tpi.mscatalogo.repository.DepositoRepository;
 import com.tpi.mscatalogo.service.ContenedorService;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.NoSuchElementException;
 
 @Service
@@ -89,9 +88,11 @@ public class ContenedorServiceImpl implements ContenedorService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<ContenedorDTO> listar(Pageable pageable) {
-        return contenedorRepository.findAll(pageable)
-                .map(this::toDTO);
+    public List<ContenedorDTO> listar() {
+        return contenedorRepository.findAll()
+                .stream()
+                .map(this::toDTO)
+                .toList();
     }
 
     // ---------- Mappers ----------

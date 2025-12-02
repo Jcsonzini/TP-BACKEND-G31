@@ -1,8 +1,7 @@
 package com.tpi.mscatalogo.service;
 
 import com.tpi.mscatalogo.dto.CamionDTO;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
+import java.util.List;
 
 public interface CamionService {
 
@@ -14,5 +13,5 @@ public interface CamionService {
 
     CamionDTO obtenerPorPatente(String patente);
 
-    Page<CamionDTO> listar(Pageable pageable);
+    List<CamionDTO> listar();
 }
