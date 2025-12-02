@@ -1,8 +1,7 @@
-package com.tpi.mscatalogo.repository;
+package com.tpi.mslogistica.repository;
 
-import com.tpi.mscatalogo.domain.Deposito;
+import com.tpi.mslogistica.domain.Deposito;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface DepositoRepository extends JpaRepository<Deposito, Long> {
-    boolean existsByNombre(String nombre);
 }

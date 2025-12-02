@@ -29,6 +29,19 @@ public class RutaController {
         return ResponseEntity.status(HttpStatus.CREATED).body(creada);
     }
 
+    @PostMapping("/generar-tentativas")
+    @Operation(summary = "Generar rutas tentativas para una solicitud")
+    public ResponseEntity<List<RutaDTO>> generarTentativas(@RequestBody RutaCreateRequest request) {
+
+        // Por ahora siempre generamos 3 rutas tentativas
+        List<RutaDTO> rutas = rutaService.generarRutasTentativas(request, 3);
+
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(rutas);
+    }
+
+
     @GetMapping("/{id}")
     @Operation(summary = "Obtener una ruta por ID")
     public ResponseEntity<RutaDTO> obtenerPorId(@PathVariable Long id) {

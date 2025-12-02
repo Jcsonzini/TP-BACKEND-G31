@@ -1,5 +1,6 @@
 package com.tpi.mssolicitudes.service;
 
+import com.tpi.mssolicitudes.client.dto.RutaDTO;
 import com.tpi.mssolicitudes.dto.CambioEstadoSolicitudRequest;
 import com.tpi.mssolicitudes.dto.SolicitudCreateRequest;
 import com.tpi.mssolicitudes.dto.SolicitudDTO;
@@ -23,4 +24,7 @@ public interface SolicitudService {
     List<SolicitudDTO> listar();
 
     List<SolicitudDTO> listarPorCliente(Long clienteId);
+
+    List<RutaDTO> generarRutasParaSolicitud(Long solicitudId);
+
 }

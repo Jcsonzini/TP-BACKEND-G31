@@ -16,7 +16,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import com.tpi.mssolicitudes.client.CatalogoClient;
-
+import com.tpi.mssolicitudes.client.dto.RutaCreateRequest;
+import com.tpi.mssolicitudes.client.dto.RutaDTO;
+import com.tpi.mssolicitudes.client.LogisticaClient;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -32,6 +34,7 @@ public class SolicitudServiceImpl implements SolicitudService {
     private final SolicitudRepository solicitudRepository;
     private final ClienteRepository clienteRepository;
     private final CatalogoClient catalogoClient;
+    private final LogisticaClient logisticaClient;
 
     // NOTA: de momento NO integramos con ms-logistica en el alta.
     // Más adelante se agregará un endpoint específico para generar rutas.
@@ -168,6 +171,27 @@ public class SolicitudServiceImpl implements SolicitudService {
                 .stream()
                 .map(this::toDTO)
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<RutaDTO> generarRutasParaSolicitud(Long solicitudId) {
+        Solicitud solicitud = solicitudRepository.findById(solicitudId)
+                .orElseThrow(() -> new IllegalArgumentException("Solicitud no encontrada: " + solicitudId));
+
+        RutaCreateRequest request = new RutaCreateRequest();
+        request.setSolicitudId(solicitud.getId());
+        request.setOrigenDireccion(solicitud.getOrigenDireccion());
+        request.setOrigenLatitud(solicitud.getOrigenLatitud());
+        request.setOrigenLongitud(solicitud.getOrigenLongitud());
+        request.setDestinoDireccion(solicitud.getDestinoDireccion());
+        request.setDestinoLatitud(solicitud.getDestinoLatitud());
+        request.setDestinoLongitud(solicitud.getDestinoLongitud());
+
+        // llamada a ms-logistica
+        List<RutaDTO> rutas = logisticaClient.generarRutasTentativas(request);
+
+        // por ahora solo las devolvemos; más adelante podés guardar los IDs en la solicitud
+        return rutas;
     }
 
     // ===================== Helpers ===========================

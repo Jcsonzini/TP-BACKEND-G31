@@ -7,7 +7,8 @@ spring:
 
   cloud:
     gateway:
-      routes:
+      mvc:
+        routes:
         - id: ms-catalogo
           uri: http://ms-catalogo:8081
           predicates:
@@ -29,8 +30,8 @@ spring:
           filters:
             - StripPrefix=1
 
-      default-filters:
-        - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials
+        default-filters:
+          - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials
 
 logging:
   level:

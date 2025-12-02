@@ -1,5 +1,6 @@
 package com.tpi.mssolicitudes.web;
 
+import com.tpi.mssolicitudes.client.dto.RutaDTO;
 import com.tpi.mssolicitudes.dto.CambioEstadoSolicitudRequest;
 import com.tpi.mssolicitudes.dto.SolicitudCreateRequest;
 import com.tpi.mssolicitudes.dto.SolicitudDTO;
@@ -80,4 +81,12 @@ public class SolicitudController {
         List<SolicitudDTO> lista = solicitudService.listar();
         return ResponseEntity.ok(lista);
     }
+
+    @PostMapping("/{id}/generar-rutas")
+    @Operation(summary = "Generar rutas tentativas para una solicitud")
+    public ResponseEntity<List<RutaDTO>> generarRutasParaSolicitud(@PathVariable Long id) {
+        List<RutaDTO> rutas = solicitudService.generarRutasParaSolicitud(id);
+        return ResponseEntity.ok(rutas);
+    }
+
 }
