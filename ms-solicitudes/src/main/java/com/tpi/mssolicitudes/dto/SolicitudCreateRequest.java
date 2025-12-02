@@ -8,8 +8,8 @@ public class SolicitudCreateRequest {
     private Long clienteId;
     private ClienteCreateRequest cliente;
 
-    private String contenedorCodigo;
-    private ContenedorCreateRequest contenedor; // si no existe, se crea
+    // El contenedor SIEMPRE se crea junto con la solicitud.
+    private ContenedorCreateRequest contenedor;
 
     // Origen
     private String origenDireccion;

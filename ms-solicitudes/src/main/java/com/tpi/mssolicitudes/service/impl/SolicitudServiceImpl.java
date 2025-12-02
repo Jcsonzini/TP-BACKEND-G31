@@ -5,6 +5,7 @@ import com.tpi.mssolicitudes.domain.EstadoSolicitud;
 import com.tpi.mssolicitudes.domain.Solicitud;
 import com.tpi.mssolicitudes.dto.CambioEstadoSolicitudRequest;
 import com.tpi.mssolicitudes.dto.ClienteCreateRequest;
+import com.tpi.mssolicitudes.dto.ContenedorCreateRequest;
 import com.tpi.mssolicitudes.dto.SolicitudCreateRequest;
 import com.tpi.mssolicitudes.dto.SolicitudDTO;
 import com.tpi.mssolicitudes.repository.ClienteRepository;
@@ -14,6 +15,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import com.tpi.mssolicitudes.client.CatalogoClient;
+
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -28,9 +31,10 @@ public class SolicitudServiceImpl implements SolicitudService {
 
     private final SolicitudRepository solicitudRepository;
     private final ClienteRepository clienteRepository;
+    private final CatalogoClient catalogoClient;
 
     // NOTA: de momento NO integramos con ms-logistica en el alta.
-    // Cuando quieras, se puede agregar un método específico para eso.
+    // Más adelante se agregará un endpoint específico para generar rutas.
 
     @Override
     public SolicitudDTO crear(SolicitudCreateRequest request) {
@@ -40,8 +44,9 @@ public class SolicitudServiceImpl implements SolicitudService {
         // 1. Resolver Cliente (id o creación)
         Cliente cliente = resolverCliente(request);
 
-        // 2. Resolver Contenedor (solo código, sin ubicación ni depósito)
-        String contenedorCodigo = resolverContenedorCodigo(request);
+        // 2. Crear contenedor en el contexto de la solicitud
+        //    Genera un código y (en el futuro) llamará a ms-catalogo
+        String contenedorCodigo = crearContenedorDesdeSolicitud(request.getContenedor());
 
         // 3. Crear entidad Solicitud en estado BORRADOR
         Solicitud solicitud = new Solicitud();
@@ -50,10 +55,12 @@ public class SolicitudServiceImpl implements SolicitudService {
         solicitud.setContenedorCodigo(contenedorCodigo);
         solicitud.setEstado(EstadoSolicitud.BORRADOR);
 
+        // Origen
         solicitud.setOrigenDireccion(request.getOrigenDireccion());
         solicitud.setOrigenLatitud(request.getOrigenLatitud());
         solicitud.setOrigenLongitud(request.getOrigenLongitud());
 
+        // Destino
         solicitud.setDestinoDireccion(request.getDestinoDireccion());
         solicitud.setDestinoLatitud(request.getDestinoLatitud());
         solicitud.setDestinoLongitud(request.getDestinoLongitud());
@@ -63,14 +70,6 @@ public class SolicitudServiceImpl implements SolicitudService {
 
         // 4. Guardar solicitud (sin crear ruta todavía)
         Solicitud guardada = solicitudRepository.save(solicitud);
-
-        // En esta etapa NO llamamos a ms-logistica.
-        // Más adelante podés tener un endpoint del tipo:
-        // POST /api/solicitudes/{id}/generar-ruta
-        // que llame a logistica, cree la ruta y actualice:
-        // - rutaAsignadaId
-        // - costoEstimado
-        // - tiempoEstimadoHoras
 
         return toDTO(guardada);
     }
@@ -146,7 +145,9 @@ public class SolicitudServiceImpl implements SolicitudService {
     @Override
     public SolicitudDTO obtenerPorNumero(String numeroSolicitud) {
         Solicitud solicitud = solicitudRepository.findByNumeroSolicitud(numeroSolicitud)
-                .orElseThrow(() -> new NoSuchElementException("Solicitud no encontrada con número " + numeroSolicitud));
+                .orElseThrow(() ->
+                        new NoSuchElementException("Solicitud no encontrada con número " + numeroSolicitud)
+                );
         return toDTO(solicitud);
     }
 
@@ -169,12 +170,12 @@ public class SolicitudServiceImpl implements SolicitudService {
                 .collect(Collectors.toList());
     }
 
-    // =============== Helpers ===================
+    // ===================== Helpers ===========================
 
     private Cliente resolverCliente(SolicitudCreateRequest request) {
 
         if (request.getClienteId() != null) {
-            Long clienteId = Objects.requireNonNull(request.getClienteId());
+            Long clienteId = Objects.requireNonNull(request.getClienteId(), "El id del cliente no puede ser nulo");
             return clienteRepository.findById(clienteId)
                     .orElseThrow(() -> new NoSuchElementException("Cliente no encontrado con id " + clienteId));
         }
@@ -195,16 +196,36 @@ public class SolicitudServiceImpl implements SolicitudService {
         return clienteRepository.save(nuevo);
     }
 
-    private String resolverContenedorCodigo(SolicitudCreateRequest request) {
-        if (request.getContenedorCodigo() != null) {
-            return request.getContenedorCodigo();
+    /**
+     * El contenedor se crea lógicamente con la solicitud.
+     * - Si viene null -> error.
+     * - Si no trae código, generamos uno (CONT-XXXXXX).
+     * - Guardamos ese código en la solicitud.
+     * - Más adelante, acá se llamará a ms-catalogo para persistir el contenedor real.
+     */
+    private String crearContenedorDesdeSolicitud(ContenedorCreateRequest cont) {
+        if (cont == null) {
+            throw new IllegalArgumentException(
+                    "Debe indicar los datos del contenedor, que se crea junto con la solicitud"
+            );
         }
 
-        if (request.getContenedor() != null) {
-            return request.getContenedor().getCodigo();
+        // 1) Si no viene código, lo generamos acá
+        String codigo = cont.getCodigo();
+        if (codigo == null || codigo.isBlank()) {
+            codigo = "CONT-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+            cont.setCodigo(codigo);
         }
 
-        throw new IllegalArgumentException("Debe indicar contenedorCodigo o datos del contenedor");
+        // 2) Estado inicial lógico del contenedor
+        cont.setEstado("PENDIENTE");
+
+        // 3) Crear el contenedor REAL en ms-catalogo usando tu CatalogoClient
+        // OJO: ajustá el nombre del método a lo que ya tengas en tu interface
+        catalogoClient.crearContenedor(cont);
+
+        // 4) En ms-solicitudes solo guardamos y devolvemos el código
+        return codigo;
     }
 
     private String generarNumeroSolicitud() {
@@ -212,6 +233,7 @@ public class SolicitudServiceImpl implements SolicitudService {
     }
 
     private SolicitudDTO toDTO(Solicitud entity) {
+
         SolicitudDTO dto = new SolicitudDTO();
         dto.setId(entity.getId());
         dto.setNumeroSolicitud(entity.getNumeroSolicitud());
