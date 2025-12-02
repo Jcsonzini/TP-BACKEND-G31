@@ -8,6 +8,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
+import java.util.Objects;
+
 @Component
 @RequiredArgsConstructor
 public class CatalogoClient {
@@ -18,21 +20,29 @@ public class CatalogoClient {
     private String baseUrl;
 
     public ContenedorDTO obtenerContenedorPorCodigo(String codigo) {
-        return webClientBuilder.build()
-                .get()
-                .uri(baseUrl + "/api/contenedores/" + codigo)
-                .retrieve()
-                .bodyToMono(ContenedorDTO.class)
-                .block();
+        String nonNullCodigo = Objects.requireNonNull(codigo, "El código del contenedor no puede ser nulo");
+        String resolvedBaseUrl = Objects.requireNonNull(baseUrl, "La baseUrl de catálogo no puede ser nula");
+
+        return webClientBuilder.baseUrl(resolvedBaseUrl).build()
+            .get()
+            .uri(uriBuilder -> uriBuilder
+                .path("/api/contenedores/{codigo}")
+                .build(nonNullCodigo))
+            .retrieve()
+            .bodyToMono(ContenedorDTO.class)
+            .block();
     }
 
     public ContenedorDTO crearContenedor(ContenedorCreateRequest request) {
-        return webClientBuilder.build()
-                .post()
-                .uri(baseUrl + "/api/contenedores")
-                .body(Mono.just(request), ContenedorCreateRequest.class)
-                .retrieve()
-                .bodyToMono(ContenedorDTO.class)
-                .block();
+        ContenedorCreateRequest nonNullRequest = Objects.requireNonNull(request, "El request de contenedor no puede ser nulo");
+        String resolvedBaseUrl = Objects.requireNonNull(baseUrl, "La baseUrl de catálogo no puede ser nula");
+
+        return webClientBuilder.baseUrl(resolvedBaseUrl).build()
+            .post()
+            .uri("/api/contenedores")
+            .body(Objects.requireNonNull(Mono.just(nonNullRequest), "El cuerpo del request no puede ser nulo"), ContenedorCreateRequest.class)
+            .retrieve()
+            .bodyToMono(ContenedorDTO.class)
+            .block();
     }
 }

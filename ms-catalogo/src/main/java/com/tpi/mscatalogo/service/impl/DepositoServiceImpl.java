@@ -30,6 +30,9 @@ public class DepositoServiceImpl implements DepositoService {
 
     @Override
     public DepositoDTO actualizar(Long id, DepositoDTO dto) {
+        if (id == null) {
+            throw new IllegalArgumentException("El id de depósito no puede ser nulo");
+        }
         Deposito entity = depositoRepository.findById(id)
                 .orElseThrow(() -> new NoSuchElementException("Depósito no encontrado: " + id));
 
@@ -48,6 +51,9 @@ public class DepositoServiceImpl implements DepositoService {
 
     @Override
     public void eliminar(Long id) {
+        if (id == null) {
+            throw new IllegalArgumentException("El id de depósito no puede ser nulo");
+        }
         if (!depositoRepository.existsById(id)) {
             throw new NoSuchElementException("Depósito no encontrado: " + id);
         }
@@ -57,6 +63,9 @@ public class DepositoServiceImpl implements DepositoService {
     @Override
     @Transactional(readOnly = true)
     public DepositoDTO obtenerPorId(Long id) {
+        if (id == null) {
+            throw new IllegalArgumentException("El id de depósito no puede ser nulo");
+        }
         return depositoRepository.findById(id)
                 .map(this::toDTO)
                 .orElseThrow(() -> new NoSuchElementException("Depósito no encontrado: " + id));
@@ -80,8 +89,8 @@ public class DepositoServiceImpl implements DepositoService {
         dto.setDireccion(entity.getDireccion());
         dto.setLocalidad(entity.getLocalidad());
         dto.setProvincia(entity.getProvincia());
-        dto.setLatitud(entity.getLatitud());
-        dto.setLongitud(entity.getLongitud());
+        dto.setLatitud(entity.getLatitud() != null ? entity.getLatitud() : null);
+        dto.setLongitud(entity.getLongitud() != null ? entity.getLongitud() : null);
         dto.setCapacidadMaxima(entity.getCapacidadMaxima());
         dto.setCostoEstadiaDiaria(entity.getCostoEstadiaDiaria());
         return dto;

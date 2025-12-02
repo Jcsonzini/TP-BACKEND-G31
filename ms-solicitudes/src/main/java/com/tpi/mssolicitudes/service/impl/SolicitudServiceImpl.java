@@ -15,8 +15,10 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -27,17 +29,21 @@ public class SolicitudServiceImpl implements SolicitudService {
     private final SolicitudRepository solicitudRepository;
     private final ClienteRepository clienteRepository;
 
+    // NOTA: de momento NO integramos con ms-logistica en el alta.
+    // Cuando quieras, se puede agregar un método específico para eso.
+
     @Override
     public SolicitudDTO crear(SolicitudCreateRequest request) {
+
+        Objects.requireNonNull(request, "El request no puede ser nulo");
 
         // 1. Resolver Cliente (id o creación)
         Cliente cliente = resolverCliente(request);
 
-        // 2. Resolver Contenedor
+        // 2. Resolver Contenedor (solo código, sin ubicación ni depósito)
         String contenedorCodigo = resolverContenedorCodigo(request);
-        // más adelante acá se integrará ms-catalogo
 
-        // 3. Crear entidad Solicitud
+        // 3. Crear entidad Solicitud en estado BORRADOR
         Solicitud solicitud = new Solicitud();
         solicitud.setNumeroSolicitud(generarNumeroSolicitud());
         solicitud.setCliente(cliente);
@@ -52,14 +58,28 @@ public class SolicitudServiceImpl implements SolicitudService {
         solicitud.setDestinoLatitud(request.getDestinoLatitud());
         solicitud.setDestinoLongitud(request.getDestinoLongitud());
 
+        solicitud.setFechaCreacion(LocalDateTime.now());
+        solicitud.setFechaUltimaActualizacion(LocalDateTime.now());
+
+        // 4. Guardar solicitud (sin crear ruta todavía)
         Solicitud guardada = solicitudRepository.save(solicitud);
+
+        // En esta etapa NO llamamos a ms-logistica.
+        // Más adelante podés tener un endpoint del tipo:
+        // POST /api/solicitudes/{id}/generar-ruta
+        // que llame a logistica, cree la ruta y actualice:
+        // - rutaAsignadaId
+        // - costoEstimado
+        // - tiempoEstimadoHoras
+
         return toDTO(guardada);
     }
 
     @Override
     public SolicitudDTO actualizar(Long id, SolicitudDTO dto) {
-        Solicitud existente = solicitudRepository.findById(id)
-                .orElseThrow(() -> new NoSuchElementException("Solicitud no encontrada con id " + id));
+        Long nonNullId = Objects.requireNonNull(id, "El id de la solicitud no puede ser nulo");
+        Solicitud existente = solicitudRepository.findById(nonNullId)
+                .orElseThrow(() -> new NoSuchElementException("Solicitud no encontrada con id " + nonNullId));
 
         if (dto.getOrigenDireccion() != null) {
             existente.setOrigenDireccion(dto.getOrigenDireccion());
@@ -83,26 +103,33 @@ public class SolicitudServiceImpl implements SolicitudService {
         existente.setTiempoRealHoras(dto.getTiempoRealHoras());
         existente.setRutaAsignadaId(dto.getRutaAsignadaId());
 
+        existente.setFechaUltimaActualizacion(LocalDateTime.now());
+
         Solicitud actualizada = solicitudRepository.save(existente);
         return toDTO(actualizada);
     }
 
     @Override
     public void cancelar(Long id) {
-        Solicitud existente = solicitudRepository.findById(id)
-                .orElseThrow(() -> new NoSuchElementException("Solicitud no encontrada con id " + id));
+        Long nonNullId = Objects.requireNonNull(id, "El id de la solicitud no puede ser nulo");
+        Solicitud existente = solicitudRepository.findById(nonNullId)
+                .orElseThrow(() -> new NoSuchElementException("Solicitud no encontrada con id " + nonNullId));
 
         existente.setEstado(EstadoSolicitud.CANCELADA);
+        existente.setFechaUltimaActualizacion(LocalDateTime.now());
+
         solicitudRepository.save(existente);
     }
 
     @Override
     public SolicitudDTO cambiarEstado(Long id, CambioEstadoSolicitudRequest request) {
-        Solicitud existente = solicitudRepository.findById(id)
-                .orElseThrow(() -> new NoSuchElementException("Solicitud no encontrada con id " + id));
+        Long nonNullId = Objects.requireNonNull(id, "El id de la solicitud no puede ser nulo");
+        Solicitud existente = solicitudRepository.findById(nonNullId)
+                .orElseThrow(() -> new NoSuchElementException("Solicitud no encontrada con id " + nonNullId));
 
         EstadoSolicitud nuevo = EstadoSolicitud.valueOf(request.getNuevoEstado());
         existente.setEstado(nuevo);
+        existente.setFechaUltimaActualizacion(LocalDateTime.now());
 
         Solicitud guardada = solicitudRepository.save(existente);
         return toDTO(guardada);
@@ -110,8 +137,9 @@ public class SolicitudServiceImpl implements SolicitudService {
 
     @Override
     public SolicitudDTO obtenerPorId(Long id) {
-        Solicitud solicitud = solicitudRepository.findById(id)
-                .orElseThrow(() -> new NoSuchElementException("Solicitud no encontrada con id " + id));
+        Long nonNullId = Objects.requireNonNull(id, "El id de la solicitud no puede ser nulo");
+        Solicitud solicitud = solicitudRepository.findById(nonNullId)
+                .orElseThrow(() -> new NoSuchElementException("Solicitud no encontrada con id " + nonNullId));
         return toDTO(solicitud);
     }
 
@@ -133,7 +161,8 @@ public class SolicitudServiceImpl implements SolicitudService {
 
     @Override
     public List<SolicitudDTO> listarPorCliente(Long clienteId) {
-        Page<Solicitud> page = solicitudRepository.findByCliente_Id(clienteId, Pageable.unpaged());
+        Long nonNullClienteId = Objects.requireNonNull(clienteId, "El id del cliente no puede ser nulo");
+        Page<Solicitud> page = solicitudRepository.findByCliente_Id(nonNullClienteId, Pageable.unpaged());
         return page.getContent()
                 .stream()
                 .map(this::toDTO)
@@ -145,8 +174,9 @@ public class SolicitudServiceImpl implements SolicitudService {
     private Cliente resolverCliente(SolicitudCreateRequest request) {
 
         if (request.getClienteId() != null) {
-            return clienteRepository.findById(request.getClienteId())
-                    .orElseThrow(() -> new NoSuchElementException("Cliente no encontrado con id " + request.getClienteId()));
+            Long clienteId = Objects.requireNonNull(request.getClienteId());
+            return clienteRepository.findById(clienteId)
+                    .orElseThrow(() -> new NoSuchElementException("Cliente no encontrado con id " + clienteId));
         }
 
         ClienteCreateRequest c = request.getCliente();
@@ -167,13 +197,10 @@ public class SolicitudServiceImpl implements SolicitudService {
 
     private String resolverContenedorCodigo(SolicitudCreateRequest request) {
         if (request.getContenedorCodigo() != null) {
-            // más adelante validaremos contra ms-catalogo
             return request.getContenedorCodigo();
         }
 
         if (request.getContenedor() != null) {
-            // MÁS ADELANTE: llamada a ms-catalogo para crear el contenedor
-            // por ahora usamos el código que venga en el request
             return request.getContenedor().getCodigo();
         }
 

@@ -41,6 +41,8 @@ services:
       - "8083:8083"
     depends_on:
       - postgres
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/tpi_backend
 
   ms-gateway:
     build: ./ms-gateway

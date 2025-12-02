@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
@@ -29,8 +30,9 @@ public class ClienteServiceImpl implements ClienteService {
 
     @Override
     public ClienteDTO actualizar(Long id, ClienteDTO dto) {
-        Cliente existente = clienteRepository.findById(id)
-                .orElseThrow(() -> new NoSuchElementException("Cliente no encontrado con id " + id));
+        Long nonNullId = Objects.requireNonNull(id, "El id de cliente no puede ser nulo");
+        Cliente existente = clienteRepository.findById(nonNullId)
+            .orElseThrow(() -> new NoSuchElementException("Cliente no encontrado con id " + nonNullId));
 
         existente.setNombre(dto.getNombre());
         existente.setApellido(dto.getApellido());
@@ -45,16 +47,18 @@ public class ClienteServiceImpl implements ClienteService {
 
     @Override
     public void eliminar(Long id) {
-        if (!clienteRepository.existsById(id)) {
-            throw new NoSuchElementException("Cliente no encontrado con id " + id);
+        Long nonNullId = Objects.requireNonNull(id, "El id de cliente no puede ser nulo");
+        if (!clienteRepository.existsById(nonNullId)) {
+            throw new NoSuchElementException("Cliente no encontrado con id " + nonNullId);
         }
-        clienteRepository.deleteById(id);
+        clienteRepository.deleteById(nonNullId);
     }
 
     @Override
     public ClienteDTO obtenerPorId(Long id) {
-        Cliente cliente = clienteRepository.findById(id)
-                .orElseThrow(() -> new NoSuchElementException("Cliente no encontrado con id " + id));
+        Long nonNullId = Objects.requireNonNull(id, "El id de cliente no puede ser nulo");
+        Cliente cliente = clienteRepository.findById(nonNullId)
+                .orElseThrow(() -> new NoSuchElementException("Cliente no encontrado con id " + nonNullId));
         return toDTO(cliente);
     }
 

@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Objects;
 
 @Service
 @Transactional
@@ -41,6 +42,9 @@ public class ContenedorServiceImpl implements ContenedorService {
 
     @Override
     public ContenedorDTO actualizar(String codigo, ContenedorDTO dto) {
+        if (codigo == null) {
+            throw new IllegalArgumentException("El código de contenedor no puede ser nulo");
+        }
         Contenedor entity = contenedorRepository.findByCodigo(codigo)
                 .orElseThrow(() -> new NoSuchElementException("Contenedor no encontrado: " + codigo));
 
@@ -57,10 +61,12 @@ public class ContenedorServiceImpl implements ContenedorService {
             entity.setEstado(EstadoContenedor.valueOf(dto.getEstado()));
         }
 
-        if (dto.getDepositoActualId() != null) {
-            Deposito deposito = depositoRepository.findById(dto.getDepositoActualId())
+        Long depositoId = dto.getDepositoActualId();
+        if (depositoId != null) {
+            Long nonNullId = Objects.requireNonNull(depositoId);
+            Deposito deposito = depositoRepository.findById(nonNullId)
                     .orElseThrow(() -> new NoSuchElementException(
-                            "Depósito no encontrado: " + dto.getDepositoActualId()));
+                            "Depósito no encontrado: " + nonNullId));
             entity.setDepositoActual(deposito);
         } else {
             entity.setDepositoActual(null);
@@ -72,6 +78,9 @@ public class ContenedorServiceImpl implements ContenedorService {
 
     @Override
     public void eliminar(String codigo) {
+        if (codigo == null) {
+            throw new IllegalArgumentException("El código de contenedor no puede ser nulo");
+        }
         if (!contenedorRepository.existsByCodigo(codigo)) {
             throw new NoSuchElementException("Contenedor no encontrado: " + codigo);
         }
@@ -81,6 +90,9 @@ public class ContenedorServiceImpl implements ContenedorService {
     @Override
     @Transactional(readOnly = true)
     public ContenedorDTO obtenerPorCodigo(String codigo) {
+        if (codigo == null) {
+            throw new IllegalArgumentException("El código de contenedor no puede ser nulo");
+        }
         return contenedorRepository.findByCodigo(codigo)
                 .map(this::toDTO)
                 .orElseThrow(() -> new NoSuchElementException("Contenedor no encontrado: " + codigo));
@@ -129,10 +141,12 @@ public class ContenedorServiceImpl implements ContenedorService {
             entity.setEstado(EstadoContenedor.valueOf(dto.getEstado()));
         }
 
-        if (dto.getDepositoActualId() != null) {
-            Deposito deposito = depositoRepository.findById(dto.getDepositoActualId())
-                    .orElseThrow(() -> new NoSuchElementException(
-                            "Depósito no encontrado: " + dto.getDepositoActualId()));
+        Long depositoId = dto.getDepositoActualId();
+        if (depositoId != null) {
+            Long nonNullId = Objects.requireNonNull(depositoId);
+            Deposito deposito = depositoRepository.findById(nonNullId)
+                .orElseThrow(() -> new NoSuchElementException(
+                    "Deposito no encontrado: " + nonNullId));
             entity.setDepositoActual(deposito);
         }
 
