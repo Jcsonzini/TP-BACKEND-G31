@@ -8,7 +8,6 @@ import java.time.LocalDateTime;
 public class SolicitudDTO {
 
     private Long id;
-    private String numeroSolicitud;
     private String contenedorCodigo;
 
     private Long clienteId;
@@ -33,6 +32,7 @@ public class SolicitudDTO {
 
     private Double costoFinal;
     private Double tiempoRealHoras;
+    private Double tarifa;
 
     // Relación con ms-logistica
     private Long rutaAsignadaId;

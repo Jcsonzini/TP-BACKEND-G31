@@ -7,39 +7,30 @@ import java.util.List;
 
 public interface RutaService {
 
-    /**
-     * Crea una nueva ruta logística a partir de los datos de la solicitud
-     * (origen/destino, solicitudId) y calcula estimaciones básicas.
-     */
+    // Crear una ruta directa ORIGEN → DESTINO (no tentativas)
     RutaDTO crearRuta(RutaCreateRequest request);
 
-    /**
-     * Busca una ruta por su ID.
-     */
+    // Obtener una ruta por id
     RutaDTO obtenerPorId(Long id);
 
-    /**
-     * Lista todas las rutas asociadas a una solicitud de ms-solicitudes.
-     */
-    List<RutaDTO> listarPorSolicitud(Long solicitudId);
+    // Seleccionar una ruta tentativa para una solicitud y borrar las demás
+    RutaDTO seleccionarRuta(Long rutaId);
+
+    // Listar todas las rutas
     List<RutaDTO> listar();
 
-    /**
-     * Genera rutas tentativas a partir de los datos de la solicitud.
-     *
-     * @param request  datos de origen/destino y solicitud
-     * @param cantidad cantidad sugerida de rutas (por ahora podemos usar 3 fijo)
-     */
+    // Listar rutas por id de solicitud
+    List<RutaDTO> listarPorSolicitud(Long solicitudId);
+
+    // Versión "corta": generar rutas tentativas a partir de un request y una cantidad
     List<RutaDTO> generarRutasTentativas(RutaCreateRequest request, int cantidad);
 
-    /**
-     * Genera rutas tentativas a partir de datos “crudos” de origen/destino.
-     */
+    // Versión "larga": por si en algún momento se llama con parámetros sueltos
     List<RutaDTO> generarRutasTentativas(Long solicitudId,
-                                         String origenDireccion,
+                                         String origenDescripcion,
                                          double origenLat,
                                          double origenLon,
-                                         String destinoDireccion,
+                                         String destinoDescripcion,
                                          double destinoLat,
                                          double destinoLon);
 }

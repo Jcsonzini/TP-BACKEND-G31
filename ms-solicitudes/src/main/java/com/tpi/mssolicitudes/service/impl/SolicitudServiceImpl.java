@@ -16,6 +16,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import com.tpi.mssolicitudes.client.CatalogoClient;
+import com.tpi.mssolicitudes.client.dto.FinalizarOperacionRequest;
 import com.tpi.mssolicitudes.client.dto.RutaCreateRequest;
 import com.tpi.mssolicitudes.client.dto.RutaDTO;
 import com.tpi.mssolicitudes.client.LogisticaClient;
@@ -53,7 +54,6 @@ public class SolicitudServiceImpl implements SolicitudService {
 
         // 3. Crear entidad Solicitud en estado BORRADOR
         Solicitud solicitud = new Solicitud();
-        solicitud.setNumeroSolicitud(generarNumeroSolicitud());
         solicitud.setCliente(cliente);
         solicitud.setContenedorCodigo(contenedorCodigo);
         solicitud.setEstado(EstadoSolicitud.BORRADOR);
@@ -67,6 +67,16 @@ public class SolicitudServiceImpl implements SolicitudService {
         solicitud.setDestinoDireccion(request.getDestinoDireccion());
         solicitud.setDestinoLatitud(request.getDestinoLatitud());
         solicitud.setDestinoLongitud(request.getDestinoLongitud());
+
+        Double tiempoEstimado = estimarTiempoHoras(
+            solicitud.getOrigenLatitud(),
+            solicitud.getOrigenLongitud(),
+            solicitud.getDestinoLatitud(),
+            solicitud.getDestinoLongitud()
+        );
+        solicitud.setTiempoEstimadoHoras(tiempoEstimado);
+        solicitud.setTiempoRealHoras(null);
+        solicitud.setTarifa(null);
 
         solicitud.setFechaCreacion(LocalDateTime.now());
         solicitud.setFechaUltimaActualizacion(LocalDateTime.now());
@@ -104,6 +114,8 @@ public class SolicitudServiceImpl implements SolicitudService {
         existente.setCostoFinal(dto.getCostoFinal());
         existente.setTiempoRealHoras(dto.getTiempoRealHoras());
         existente.setRutaAsignadaId(dto.getRutaAsignadaId());
+        existente.setTarifa(dto.getTarifa());
+
 
         existente.setFechaUltimaActualizacion(LocalDateTime.now());
 
@@ -146,15 +158,6 @@ public class SolicitudServiceImpl implements SolicitudService {
     }
 
     @Override
-    public SolicitudDTO obtenerPorNumero(String numeroSolicitud) {
-        Solicitud solicitud = solicitudRepository.findByNumeroSolicitud(numeroSolicitud)
-                .orElseThrow(() ->
-                        new NoSuchElementException("Solicitud no encontrada con número " + numeroSolicitud)
-                );
-        return toDTO(solicitud);
-    }
-
-    @Override
     public List<SolicitudDTO> listar() {
         Page<Solicitud> page = solicitudRepository.findAll(Pageable.unpaged());
         return page.getContent()
@@ -175,9 +178,26 @@ public class SolicitudServiceImpl implements SolicitudService {
 
     @Override
     public List<RutaDTO> generarRutasParaSolicitud(Long solicitudId) {
-        Solicitud solicitud = solicitudRepository.findById(solicitudId)
-                .orElseThrow(() -> new IllegalArgumentException("Solicitud no encontrada: " + solicitudId));
 
+        Long nonNullId = Objects.requireNonNull(solicitudId,
+                "El id de la solicitud no puede ser nulo");
+
+        Solicitud solicitud = solicitudRepository.findById(nonNullId)
+                .orElseThrow(() ->
+                        new NoSuchElementException("Solicitud no encontrada con id " + nonNullId));
+
+        // Validar que tenga origen y destino completos
+        if (solicitud.getOrigenDireccion() == null
+                || solicitud.getOrigenLatitud() == null
+                || solicitud.getOrigenLongitud() == null
+                || solicitud.getDestinoDireccion() == null
+                || solicitud.getDestinoLatitud() == null
+                || solicitud.getDestinoLongitud() == null) {
+            throw new IllegalStateException(
+                    "La solicitud no tiene origen/destino completos para generar rutas");
+        }
+
+        // Armar el request para ms-logistica
         RutaCreateRequest request = new RutaCreateRequest();
         request.setSolicitudId(solicitud.getId());
         request.setOrigenDireccion(solicitud.getOrigenDireccion());
@@ -187,13 +207,69 @@ public class SolicitudServiceImpl implements SolicitudService {
         request.setDestinoLatitud(solicitud.getDestinoLatitud());
         request.setDestinoLongitud(solicitud.getDestinoLongitud());
 
-        // llamada a ms-logistica
-        List<RutaDTO> rutas = logisticaClient.generarRutasTentativas(request);
-
-        // por ahora solo las devolvemos; más adelante podés guardar los IDs en la solicitud
-        return rutas;
+        // llamada a ms-logistica usando el cliente HTTP (WebClient por adentro)
+        return logisticaClient.generarRutasTentativas(request);
     }
 
+    @Override
+    public SolicitudDTO asignarRuta(Long solicitudId, Long rutaId) {
+
+        Long nonNullSolicitudId = Objects.requireNonNull(solicitudId, "El id de la solicitud no puede ser nulo");
+        Long nonNullRutaId = Objects.requireNonNull(rutaId, "El id de la ruta no puede ser nulo");
+
+        Solicitud solicitud = solicitudRepository.findById(nonNullSolicitudId)
+                .orElseThrow(() -> new NoSuchElementException("Solicitud no encontrada: " + nonNullSolicitudId));
+
+        RutaDTO rutaSeleccionada = logisticaClient.seleccionarRuta(nonNullRutaId);
+
+        if (rutaSeleccionada != null && rutaSeleccionada.getSolicitudId() != null
+                && !rutaSeleccionada.getSolicitudId().equals(solicitud.getId())) {
+            throw new IllegalStateException("La ruta " + nonNullRutaId + " no pertenece a la solicitud " + nonNullSolicitudId);
+        }
+
+        solicitud.setRutaAsignadaId(nonNullRutaId);
+        solicitud.setEstado(EstadoSolicitud.PLANIFICADA);
+        solicitud.setFechaUltimaActualizacion(LocalDateTime.now());
+
+        Solicitud guardada = solicitudRepository.save(solicitud);
+        return toDTO(guardada);
+    }
+
+    @Override
+    public SolicitudDTO finalizarOperacion(Long solicitudId, FinalizarOperacionRequest request) {
+
+        Long nonNullSolicitudId = Objects.requireNonNull(solicitudId, "El id de la solicitud no puede ser nulo");
+        FinalizarOperacionRequest nonNullRequest = Objects.requireNonNull(request, "El request no puede ser nulo");
+
+        Solicitud solicitud = solicitudRepository.findById(nonNullSolicitudId)
+                .orElseThrow(() -> new NoSuchElementException("Solicitud no encontrada: " + nonNullSolicitudId));
+
+        // Solo se puede finalizar si está PLANIFICADA o EN_TRANSITO
+        if (solicitud.getEstado() != EstadoSolicitud.PLANIFICADA &&
+            solicitud.getEstado() != EstadoSolicitud.EN_TRANSITO) {
+
+            throw new IllegalStateException(
+                    "No se puede finalizar una solicitud en estado: " + solicitud.getEstado());
+        }
+
+        // Cambiamos estado → ENTREGADA
+        solicitud.setEstado(EstadoSolicitud.ENTREGADA);
+
+        // Datos reales enviados por ms-logistica
+        if (nonNullRequest.getRutaId() != null) {
+            solicitud.setRutaAsignadaId(nonNullRequest.getRutaId());
+        }
+        solicitud.setTiempoRealHoras(nonNullRequest.getTiempoRealHoras());
+        solicitud.setCostoFinal(nonNullRequest.getCostoTotalReal());
+        solicitud.setFechaUltimaActualizacion(LocalDateTime.now());
+
+        solicitudRepository.save(solicitud);
+
+        return toDTO(solicitud);
+    }
+
+
+ 
     // ===================== Helpers ===========================
 
     private Cliente resolverCliente(SolicitudCreateRequest request) {
@@ -252,15 +328,10 @@ public class SolicitudServiceImpl implements SolicitudService {
         return codigo;
     }
 
-    private String generarNumeroSolicitud() {
-        return "SOL-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
-    }
-
     private SolicitudDTO toDTO(Solicitud entity) {
 
         SolicitudDTO dto = new SolicitudDTO();
         dto.setId(entity.getId());
-        dto.setNumeroSolicitud(entity.getNumeroSolicitud());
         dto.setContenedorCodigo(entity.getContenedorCodigo());
 
         if (entity.getCliente() != null) {
@@ -284,11 +355,39 @@ public class SolicitudServiceImpl implements SolicitudService {
         dto.setTiempoEstimadoHoras(entity.getTiempoEstimadoHoras());
         dto.setCostoFinal(entity.getCostoFinal());
         dto.setTiempoRealHoras(entity.getTiempoRealHoras());
+        dto.setTarifa(entity.getTarifa());
 
         dto.setRutaAsignadaId(entity.getRutaAsignadaId());
         dto.setFechaCreacion(entity.getFechaCreacion());
         dto.setFechaUltimaActualizacion(entity.getFechaUltimaActualizacion());
 
+
         return dto;
+    }
+
+    private Double estimarTiempoHoras(Double origenLatitud,
+                                      Double origenLongitud,
+                                      Double destinoLatitud,
+                                      Double destinoLongitud) {
+
+        if (origenLatitud == null || origenLongitud == null
+                || destinoLatitud == null || destinoLongitud == null) {
+            return null;
+        }
+
+        double radioTierraKm = 6371.0;
+        double lat1Rad = Math.toRadians(origenLatitud);
+        double lat2Rad = Math.toRadians(destinoLatitud);
+        double deltaLat = Math.toRadians(destinoLatitud - origenLatitud);
+        double deltaLon = Math.toRadians(destinoLongitud - origenLongitud);
+
+        double a = Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2)
+                + Math.cos(lat1Rad) * Math.cos(lat2Rad)
+                * Math.sin(deltaLon / 2) * Math.sin(deltaLon / 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        double distanciaKm = radioTierraKm * c;
+
+        double velocidadPromedioKmH = 60.0; // heurística básica para estimación inicial
+        return distanciaKm / velocidadPromedioKmH;
     }
 }

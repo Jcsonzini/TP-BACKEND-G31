@@ -8,12 +8,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(
-    name = "solicitudes",
-    uniqueConstraints = {
-        @UniqueConstraint(name = "uk_solicitud_numero", columnNames = "numero_solicitud")
-    }
-)
+@Table(name = "solicitudes")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -24,12 +19,6 @@ public class Solicitud {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-
-    /**
-     * Identificador humano: ej. SOL-0001 (único).
-     */
-    @Column(name = "numero_solicitud", nullable = false, length = 50)
-    private String numeroSolicitud;
 
     /**
      * Código del contenedor tal como existe en ms-catalogo.
@@ -72,6 +61,13 @@ public class Solicitud {
 
     private Double costoFinal;
     private Double tiempoRealHoras;
+
+    
+
+    /**
+     * Tarifa final aplicada a la solicitud (se calculará al completar la operación).
+     */
+    private Double tarifa;
 
     /**
      * ID de la ruta en ms-logistica asociada a esta solicitud (cuando ya está calculada).

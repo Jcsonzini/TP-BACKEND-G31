@@ -4,6 +4,7 @@ import com.tpi.mssolicitudes.client.dto.RutaDTO;
 import com.tpi.mssolicitudes.dto.CambioEstadoSolicitudRequest;
 import com.tpi.mssolicitudes.dto.SolicitudCreateRequest;
 import com.tpi.mssolicitudes.dto.SolicitudDTO;
+import com.tpi.mssolicitudes.client.dto.FinalizarOperacionRequest;
 
 import java.util.List;
 
@@ -19,12 +20,21 @@ public interface SolicitudService {
 
     SolicitudDTO obtenerPorId(Long id);
 
-    SolicitudDTO obtenerPorNumero(String numeroSolicitud);
-
     List<SolicitudDTO> listar();
 
     List<SolicitudDTO> listarPorCliente(Long clienteId);
 
+    /**
+     * Genera rutas tentativas en ms-logistica para una solicitud existente.
+     *
+     * @param solicitudId id de la solicitud
+     */
     List<RutaDTO> generarRutasParaSolicitud(Long solicitudId);
+
+    /**
+     * Asigna una ruta definitiva para la solicitud y la marca como planificada.
+     */
+    SolicitudDTO asignarRuta(Long solicitudId, Long rutaId);
+    SolicitudDTO finalizarOperacion(Long solicitudId, FinalizarOperacionRequest request);
 
 }

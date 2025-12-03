@@ -1,5 +1,6 @@
 package com.tpi.mssolicitudes.web;
 
+import com.tpi.mssolicitudes.client.dto.FinalizarOperacionRequest;
 import com.tpi.mssolicitudes.client.dto.RutaDTO;
 import com.tpi.mssolicitudes.dto.CambioEstadoSolicitudRequest;
 import com.tpi.mssolicitudes.dto.SolicitudCreateRequest;
@@ -61,13 +62,6 @@ public class SolicitudController {
         return ResponseEntity.ok(dto);
     }
 
-    @GetMapping("/por-numero/{numero}")
-    @Operation(summary = "Obtener una solicitud por número (ej: SOL-1234)")
-    public ResponseEntity<SolicitudDTO> obtenerPorNumero(@PathVariable String numero) {
-        SolicitudDTO dto = solicitudService.obtenerPorNumero(numero);
-        return ResponseEntity.ok(dto);
-    }
-
     @GetMapping("/por-cliente/{clienteId}")
     @Operation(summary = "Obtener solicitudes asociadas a un cliente")
     public ResponseEntity<List<SolicitudDTO>> listarPorCliente(@PathVariable Long clienteId) {
@@ -88,5 +82,21 @@ public class SolicitudController {
         List<RutaDTO> rutas = solicitudService.generarRutasParaSolicitud(id);
         return ResponseEntity.ok(rutas);
     }
+
+    @PostMapping("/{id}/asignar-ruta/{rutaId}")
+    @Operation(summary = "Asignar una ruta definitiva a la solicitud")
+    public ResponseEntity<SolicitudDTO> asignarRuta(@PathVariable Long id, @PathVariable Long rutaId) {
+        SolicitudDTO actualizada = solicitudService.asignarRuta(id, rutaId);
+        return ResponseEntity.ok(actualizada);
+    }
+
+    @PutMapping("/{id}/finalizar-operacion")
+    @Operation(summary = "Marcar una solicitud como entregada y registrar datos finales")
+    public ResponseEntity<SolicitudDTO> finalizarOperacion(@PathVariable Long id,
+                                                           @RequestBody FinalizarOperacionRequest request) {
+        SolicitudDTO actualizada = solicitudService.finalizarOperacion(id, request);
+        return ResponseEntity.ok(actualizada);
+    }
+
 
 }

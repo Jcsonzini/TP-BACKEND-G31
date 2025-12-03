@@ -1,6 +1,11 @@
 package com.tpi.mslogistica.service.impl;
 
-import com.tpi.mslogistica.domain.*;
+import com.tpi.mslogistica.client.OsrmClient;
+import com.tpi.mslogistica.domain.Deposito;
+import com.tpi.mslogistica.domain.EstadoRuta;
+import com.tpi.mslogistica.domain.EstadoTramo;
+import com.tpi.mslogistica.domain.Ruta;
+import com.tpi.mslogistica.domain.Tramo;
 import com.tpi.mslogistica.dto.RutaCreateRequest;
 import com.tpi.mslogistica.dto.RutaDTO;
 import com.tpi.mslogistica.dto.TramoDTO;
@@ -10,9 +15,15 @@ import com.tpi.mslogistica.repository.TramoRepository;
 import com.tpi.mslogistica.service.RutaService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.NoSuchElementException;
+import java.util.Objects;
 import java.util.stream.Collectors;
+import java.util.Collections;
 
 @Service
 @RequiredArgsConstructor
@@ -21,69 +32,80 @@ public class RutaServiceImpl implements RutaService {
     private final RutaRepository rutaRepository;
     private final TramoRepository tramoRepository;
     private final DepositoRepository depositoRepository;
+    private final OsrmClient osrmClient;
 
-    // -------------------------------------------------------------
-    // 1) CREAR RUTA NORMAL (ya lo tenías)
-    // -------------------------------------------------------------
+    // =========================================================
+    // 1) CREAR RUTA "NORMAL" (ORIGEN → DESTINO directo)
+    // =========================================================
     @Override
     public RutaDTO crearRuta(RutaCreateRequest request) {
 
+        Objects.requireNonNull(request, "El request de ruta no puede ser nulo");
+
         Ruta ruta = new Ruta();
         ruta.setSolicitudId(request.getSolicitudId());
+
         ruta.setOrigenDireccion(request.getOrigenDireccion());
         ruta.setOrigenLatitud(request.getOrigenLatitud());
         ruta.setOrigenLongitud(request.getOrigenLongitud());
+
         ruta.setDestinoDireccion(request.getDestinoDireccion());
         ruta.setDestinoLatitud(request.getDestinoLatitud());
         ruta.setDestinoLongitud(request.getDestinoLongitud());
-        ruta.setEstado(EstadoRuta.PLANIFICADA);
 
-        // Dummy temporal
-        double distanciaKm = 100.0;
-        double tiempoHoras = 2.5;
-        double costo = 1000.0;
+        // Llamamos a OSRM para obtener distancia y tiempo reales para el tramo directo
+        OsrmClient.OsrmRoute osrmRoute = osrmClient.route(
+                request.getOrigenLatitud(),
+                request.getOrigenLongitud(),
+                request.getDestinoLatitud(),
+                request.getDestinoLongitud()
+        );
+
+        double distanciaKm = osrmRoute.getDistance() / 1000.0;
+        double tiempoHoras = osrmRoute.getDuration() / 3600.0;
+        double costo = distanciaKm * 150.0; // costo dummy: $150/km
 
         ruta.setDistanciaTotalKmEstimada(distanciaKm);
         ruta.setTiempoTotalHorasEstimada(tiempoHoras);
         ruta.setCostoTotalEstimado(costo);
-
+        ruta.setEstado(EstadoRuta.PLANIFICADA);
         ruta.setTramos(new ArrayList<>());
+
         Ruta rutaGuardada = rutaRepository.save(ruta);
 
-        // 1 tramo simple
         Tramo tramo = new Tramo();
         tramo.setRuta(rutaGuardada);
         tramo.setOrden(1);
+
         tramo.setOrigenDescripcion(request.getOrigenDireccion());
         tramo.setOrigenLatitud(request.getOrigenLatitud());
         tramo.setOrigenLongitud(request.getOrigenLongitud());
+
         tramo.setDestinoDescripcion(request.getDestinoDireccion());
         tramo.setDestinoLatitud(request.getDestinoLatitud());
         tramo.setDestinoLongitud(request.getDestinoLongitud());
+
         tramo.setDistanciaKmEstimada(distanciaKm);
         tramo.setTiempoHorasEstimada(tiempoHoras);
-        tramo.setHorasEsperaDepositoEstimada(0.0);
         tramo.setEstado(EstadoTramo.PENDIENTE);
 
         tramoRepository.save(tramo);
+
         rutaGuardada.getTramos().add(tramo);
 
         return toRutaDTO(rutaGuardada);
     }
 
-    // -------------------------------------------------------------
-    // 2) OBTENER RUTA
-    // -------------------------------------------------------------
+    // =========================================================
+    // 2) OBTENER / LISTAR
+    // =========================================================
     @Override
     public RutaDTO obtenerPorId(Long id) {
         Ruta ruta = rutaRepository.findById(id)
-                .orElseThrow(() -> new NoSuchElementException("Ruta no encontrada " + id));
+                .orElseThrow(() -> new NoSuchElementException("Ruta no encontrada con id " + id));
         return toRutaDTO(ruta);
     }
 
-    // -------------------------------------------------------------
-    // 3) LISTAR TODAS
-    // -------------------------------------------------------------
     @Override
     public List<RutaDTO> listar() {
         return rutaRepository.findAll()
@@ -92,229 +114,277 @@ public class RutaServiceImpl implements RutaService {
                 .collect(Collectors.toList());
     }
 
-    // -------------------------------------------------------------
-    // 4) LISTAR POR SOLICITUD
-    // -------------------------------------------------------------
     @Override
     public List<RutaDTO> listarPorSolicitud(Long solicitudId) {
+        if (solicitudId == null) {
+            throw new IllegalArgumentException("El id de la solicitud no puede ser nulo");
+        }
         return rutaRepository.findBySolicitudId(solicitudId)
                 .stream()
                 .map(this::toRutaDTO)
                 .collect(Collectors.toList());
     }
 
-    // -------------------------------------------------------------
-    // 5) GENERAR RUTAS TENTATIVAS (entrada desde ms-solicitudes)
-    // -------------------------------------------------------------
+    // =========================================================
+    // 3) GENERAR RUTAS TENTATIVAS CON DEPÓSITOS + OSRM
+    //    (versión "nueva" con request - usada por ms-solicitudes)
+    // =========================================================
     @Override
     public List<RutaDTO> generarRutasTentativas(RutaCreateRequest request, int cantidad) {
 
-        // Por ahora, ignoramos "cantidad". Siempre devolvemos 3.
-        return generarRutasTentativas(
-            request.getSolicitudId(),
-                request.getOrigenDireccion(),
-                request.getOrigenLatitud(),
-                request.getOrigenLongitud(),
-                request.getDestinoDireccion(),
-                request.getDestinoLatitud(),
-                request.getDestinoLongitud()
-        );
+        Objects.requireNonNull(request, "El request de ruta no puede ser nulo");
+
+        double origenLat = request.getOrigenLatitud();
+        double origenLon = request.getOrigenLongitud();
+        double destinoLat = request.getDestinoLatitud();
+        double destinoLon = request.getDestinoLongitud();
+        int objetivo = Math.max(cantidad, 4);
+
+        // Traemos todos los depósitos
+        List<Deposito> depositos = depositoRepository.findAll();
+
+        // Ordenamos por cercanía al segmento origen-destino usando Haversine como aproximación
+        List<Deposito> cercanos = new ArrayList<>(depositos);
+        cercanos.sort(Comparator.comparingDouble(dep ->
+            distanciaHaversine(
+                origenLat,
+                origenLon,
+                dep.getLatitud().doubleValue(),
+                dep.getLongitud().doubleValue()
+            )
+        ));
+
+        List<RutaDTO> resultado = new ArrayList<>();
+
+        // Ruta 1: ORIGEN → DESTINO (sin depósitos)
+        if (resultado.size() < objetivo) {
+            RutaDTO r0 = crearRutaTentativaPersistida(
+                    request.getSolicitudId(),
+                    request.getOrigenDireccion(), origenLat, origenLon,
+                    Collections.emptyList(),
+                    request.getDestinoDireccion(), destinoLat, destinoLon
+            );
+            resultado.add(r0);
+        }
+
+        // Ruta 2: ORIGEN → depósito más cercano → DESTINO
+        if (!cercanos.isEmpty() && resultado.size() < objetivo) {
+            RutaDTO r1 = crearRutaTentativaPersistida(
+                    request.getSolicitudId(),
+                    request.getOrigenDireccion(), origenLat, origenLon,
+                    List.of(cercanos.get(0)),
+                    request.getDestinoDireccion(), request.getDestinoLatitud(), request.getDestinoLongitud()
+            );
+            resultado.add(r1);
+        }
+
+        // Ruta 3: ORIGEN → depósito segundo → DESTINO
+        if (cercanos.size() > 1 && resultado.size() < objetivo) {
+            RutaDTO r2 = crearRutaTentativaPersistida(
+                    request.getSolicitudId(),
+                    request.getOrigenDireccion(), origenLat, origenLon,
+                    List.of(cercanos.get(1)),
+                    request.getDestinoDireccion(), request.getDestinoLatitud(), request.getDestinoLongitud()
+            );
+            resultado.add(r2);
+        }
+
+        // Ruta 4: ORIGEN → dep1 → dep2 → DESTINO (si hay al menos 2 depósitos)
+        if (cercanos.size() > 1 && resultado.size() < objetivo) {
+            RutaDTO r3 = crearRutaTentativaPersistida(
+                    request.getSolicitudId(),
+                    request.getOrigenDireccion(), origenLat, origenLon,
+                    List.of(cercanos.get(0), cercanos.get(1)),
+                    request.getDestinoDireccion(), request.getDestinoLatitud(), request.getDestinoLongitud()
+            );
+            resultado.add(r3);
+        }
+
+        // Ruta extra: ORIGEN → dep1 → dep3 → DESTINO (cuando hay al menos 3 depósitos y todavía falta)
+        if (cercanos.size() > 2 && resultado.size() < objetivo) {
+            RutaDTO rExtra = crearRutaTentativaPersistida(
+                    request.getSolicitudId(),
+                    request.getOrigenDireccion(), origenLat, origenLon,
+                    List.of(cercanos.get(0), cercanos.get(2)),
+                    request.getDestinoDireccion(), request.getDestinoLatitud(), request.getDestinoLongitud()
+            );
+            resultado.add(rExtra);
+        }
+
+        // Si aún faltan rutas para llegar al objetivo, rellenamos con la última combinación disponible
+        while (!resultado.isEmpty() && resultado.size() < objetivo) {
+            resultado.add(resultado.get(resultado.size() - 1));
+        }
+
+        return resultado;
     }
 
-    // -------------------------------------------------------------
-    // 6) GENERAR RUTAS TENTATIVAS (lógica real con depósitos)
-    // -------------------------------------------------------------
+    // =========================================================
+    // 3.bis) Versión "larga" por si se usa desde otros lados
+    // =========================================================
     @Override
     public List<RutaDTO> generarRutasTentativas(Long solicitudId,
-                                                String origenDireccion,
+                                                String origenDescripcion,
                                                 double origenLat,
                                                 double origenLon,
-                                                String destinoDireccion,
+                                                String destinoDescripcion,
                                                 double destinoLat,
                                                 double destinoLon) {
 
-        List<Deposito> depositos = depositoRepository.findAll();
+        RutaCreateRequest request = new RutaCreateRequest();
+        request.setSolicitudId(solicitudId);
+        request.setOrigenDireccion(origenDescripcion);
+        request.setOrigenLatitud(origenLat);
+        request.setOrigenLongitud(origenLon);
+        request.setDestinoDireccion(destinoDescripcion);
+        request.setDestinoLatitud(destinoLat);
+        request.setDestinoLongitud(destinoLon);
 
-        if (depositos.isEmpty()) {
-            throw new IllegalStateException("No hay depósitos cargados en la BD");
+        // por defecto generamos 4 rutas tentativas
+        return generarRutasTentativas(request, 4);
+    }
+
+    // =========================================================
+    // 4) SELECCIONAR RUTA (y borrar las demás tentativas de la misma solicitud)
+    // =========================================================
+    @Override
+    @Transactional
+    public RutaDTO seleccionarRuta(Long rutaId) {
+        Ruta ruta = rutaRepository.findById(rutaId)
+                .orElseThrow(() ->
+                        new NoSuchElementException("Ruta no encontrada con id " + rutaId));
+
+        Long solicitudId = ruta.getSolicitudId();
+        if (solicitudId == null) {
+            throw new IllegalStateException("La ruta no tiene solicitud asociada");
         }
 
-        // Ordenar depósitos por cercanía al origen
-        depositos.sort(Comparator.comparingDouble(
-                d -> distanciaHaversine(
-                        origenLat, origenLon,
-                        d.getLatitud().doubleValue(),
-                        d.getLongitud().doubleValue()
-                )
-        ));
+        // Borramos TODAS las otras rutas tentativas de esa solicitud
+        rutaRepository.deleteBySolicitudIdAndIdNot(solicitudId, rutaId);
 
-        Deposito dep1 = depositos.get(0);
-        Deposito dep2 = depositos.size() > 1 ? depositos.get(1) : dep1;
-        Deposito dep3 = depositos.size() > 2 ? depositos.get(2) : dep1;
+        // Marcamos esta ruta como PLANIFICADA (o el estado que uses para definitiva)
+        ruta.setEstado(EstadoRuta.PLANIFICADA);
+        Ruta rutaGuardada = rutaRepository.save(ruta);
 
-        List<RutaDTO> rutas = new ArrayList<>();
-
-        // ---------------------------------------------------------
-        // RUTA 1: ORIGEN -> DEP1 -> DESTINO
-        // ---------------------------------------------------------
-        rutas.add( crearRutaTentativaPersistida(
-            solicitudId,
-            origenDireccion, origenLat, origenLon,
-                dep1,
-                destinoDireccion, destinoLat, destinoLon
-        ));
-
-        // ---------------------------------------------------------
-        // RUTA 2: ORIGEN -> DEP2 -> DEP3 -> DESTINO
-        // ---------------------------------------------------------
-        rutas.add( crearRutaTentativaPersistida(
-            solicitudId,
-            origenDireccion, origenLat, origenLon,
-                dep2, dep3,
-                destinoDireccion, destinoLat, destinoLon
-        ));
-
-        // ---------------------------------------------------------
-        // RUTA 3: ORIGEN -> DEP3 -> DESTINO
-        // ---------------------------------------------------------
-        rutas.add( crearRutaTentativaPersistida(
-            solicitudId,
-            origenDireccion, origenLat, origenLon,
-                dep3,
-                destinoDireccion, destinoLat, destinoLon
-        ));
-
-        return rutas;
+        // Devolvemos el DTO usando el mapper ya existente
+        return toRutaDTO(rutaGuardada);
     }
 
-    // -------------------------------------------------------------
-    // CREA LA RUTA EN BD Y SUS TRAMOS (1 depósito)
-    // -------------------------------------------------------------
-        private RutaDTO crearRutaTentativaPersistida(Long solicitudId,
-                             String origenDesc, double oLat, double oLon,
-                                                 Deposito dep,
-                                                 String destinoDesc, double dLat, double dLon) {
-
-        return crearRutaTentativaPersistida(solicitudId,
-            origenDesc, oLat, oLon,
-                new Deposito[]{dep},
-                destinoDesc, dLat, dLon);
-    }
-
-    // -------------------------------------------------------------
-    // CREA LA RUTA EN BD Y SUS TRAMOS (2 depósitos)
-    // -------------------------------------------------------------
-        private RutaDTO crearRutaTentativaPersistida(Long solicitudId,
-                             String origenDesc, double oLat, double oLon,
-                                                 Deposito dep1, Deposito dep2,
-                                                 String destinoDesc, double dLat, double dLon) {
-
-        return crearRutaTentativaPersistida(solicitudId,
-            origenDesc, oLat, oLon,
-                new Deposito[]{dep1, dep2},
-                destinoDesc, dLat, dLon);
-    }
-
-    // -------------------------------------------------------------
+    // =========================================================
     // IMPLEMENTACIÓN GENÉRICA PARA 1..N DEPÓSITOS
-    // -------------------------------------------------------------
+    // =========================================================
     private RutaDTO crearRutaTentativaPersistida(Long solicitudId,
                                                  String origenDesc, double oLat, double oLon,
-                                                 Deposito[] depositos,
+                                                 List<Deposito> depositosIntermedios,
                                                  String destinoDesc, double dLat, double dLon) {
 
+        // 1) Crear Ruta base
         Ruta ruta = new Ruta();
-        ruta.setEstado(EstadoRuta.TENTATIVA);
         ruta.setSolicitudId(solicitudId);
+
         ruta.setOrigenDireccion(origenDesc);
         ruta.setOrigenLatitud(oLat);
         ruta.setOrigenLongitud(oLon);
+
         ruta.setDestinoDireccion(destinoDesc);
         ruta.setDestinoLatitud(dLat);
         ruta.setDestinoLongitud(dLon);
+
+        ruta.setEstado(EstadoRuta.PLANIFICADA);
         ruta.setTramos(new ArrayList<>());
 
-        ruta = rutaRepository.save(ruta);
+        Ruta rutaGuardada = rutaRepository.save(ruta);
 
+        // Construimos la secuencia de puntos: origen -> depósitos -> destino
         List<Punto> puntos = new ArrayList<>();
         puntos.add(new Punto(origenDesc, oLat, oLon));
 
-        for (Deposito dep : depositos) {
-            puntos.add(new Punto(
+        for (Deposito dep : depositosIntermedios) {
+                puntos.add(new Punto(
                     dep.getNombre(),
                     dep.getLatitud().doubleValue(),
                     dep.getLongitud().doubleValue()
-            ));
+                ));
         }
 
         puntos.add(new Punto(destinoDesc, dLat, dLon));
 
-        double totalDist = 0.0;
-        double totalTiempo = 0.0;
-        double totalCosto = 0.0;
+        double distanciaTotal = 0.0;
+        double tiempoTotal = 0.0;
+        double costoTotal = 0.0;
 
+        int orden = 1;
         for (int i = 0; i < puntos.size() - 1; i++) {
+            Punto p1 = puntos.get(i);
+            Punto p2 = puntos.get(i + 1);
 
-            Punto a = puntos.get(i);
-            Punto b = puntos.get(i + 1);
+            // Llamamos a OSRM para cada tramo
+            OsrmClient.OsrmRoute osrmRoute = osrmClient.route(
+                    p1.latitud,
+                    p1.longitud,
+                    p2.latitud,
+                    p2.longitud
+            );
 
-            double dist = distanciaHaversine(a.lat, a.lon, b.lat, b.lon);
-            double horas = dist / 60.0; // 60 km/h promedio
-            double costo = dist * 150.0;
+            double distanciaKm = osrmRoute.getDistance() / 1000.0;
+            double tiempoHoras = osrmRoute.getDuration() / 3600.0;
+            double costo = distanciaKm * 150.0; // costo dummy
 
-            totalDist += dist;
-            totalTiempo += horas;
-            totalCosto += costo;
+            distanciaTotal += distanciaKm;
+            tiempoTotal += tiempoHoras;
+            costoTotal += costo;
 
             Tramo tramo = new Tramo();
-            tramo.setRuta(ruta);
-            tramo.setOrden(i + 1);
-            tramo.setOrigenDescripcion(a.desc);
-            tramo.setOrigenLatitud(a.lat);
-            tramo.setOrigenLongitud(a.lon);
-            tramo.setDestinoDescripcion(b.desc);
-            tramo.setDestinoLatitud(b.lat);
-            tramo.setDestinoLongitud(b.lon);
-            tramo.setDistanciaKmEstimada(dist);
-            tramo.setTiempoHorasEstimada(horas);
-            tramo.setHorasEsperaDepositoEstimada(0.0);
+            tramo.setRuta(rutaGuardada);
+            tramo.setOrden(orden++);
+
+            tramo.setOrigenDescripcion(p1.descripcion);
+            tramo.setOrigenLatitud(p1.latitud);
+            tramo.setOrigenLongitud(p1.longitud);
+
+            tramo.setDestinoDescripcion(p2.descripcion);
+            tramo.setDestinoLatitud(p2.latitud);
+            tramo.setDestinoLongitud(p2.longitud);
+
+            tramo.setDistanciaKmEstimada(distanciaKm);
+            tramo.setTiempoHorasEstimada(tiempoHoras);
             tramo.setEstado(EstadoTramo.PENDIENTE);
 
             tramoRepository.save(tramo);
-            ruta.getTramos().add(tramo);
+            rutaGuardada.getTramos().add(tramo);
         }
 
-        ruta.setDistanciaTotalKmEstimada(totalDist);
-        ruta.setTiempoTotalHorasEstimada(totalTiempo);
-        ruta.setCostoTotalEstimado(totalCosto);
+        rutaGuardada.setDistanciaTotalKmEstimada(distanciaTotal);
+        rutaGuardada.setTiempoTotalHorasEstimada(tiempoTotal);
+        rutaGuardada.setCostoTotalEstimado(costoTotal);
 
-        ruta = rutaRepository.save(ruta);
+        rutaGuardada = rutaRepository.save(rutaGuardada);
 
-        return toRutaDTO(ruta);
+        return toRutaDTO(rutaGuardada);
     }
 
-    // -------------------------------------------------------------
-    // PUNTO (clase interna)
-    // -------------------------------------------------------------
+    // Pequeña clase interna para manejar puntos del recorrido
     private static class Punto {
-        String desc;
-        double lat;
-        double lon;
+        String descripcion;
+        double latitud;
+        double longitud;
 
-        Punto(String desc, double lat, double lon) {
-            this.desc = desc;
-            this.lat = lat;
-            this.lon = lon;
+        Punto(String descripcion, double latitud, double longitud) {
+            this.descripcion = descripcion;
+            this.latitud = latitud;
+            this.longitud = longitud;
         }
     }
 
-    // -------------------------------------------------------------
-    // HAVERSINE
-    // -------------------------------------------------------------
+    // =========================================================
+    // Haversine para ordenar depósitos
+    // =========================================================
     private double distanciaHaversine(double lat1, double lon1, double lat2, double lon2) {
-        double R = 6371;
+        final double R = 6371.0; // radio aproximado de la Tierra en km
+
         double dLat = Math.toRadians(lat2 - lat1);
         double dLon = Math.toRadians(lon2 - lon1);
+
         lat1 = Math.toRadians(lat1);
         lat2 = Math.toRadians(lat2);
 
@@ -322,36 +392,40 @@ public class RutaServiceImpl implements RutaService {
                 + Math.cos(lat1) * Math.cos(lat2)
                 * Math.sin(dLon / 2) * Math.sin(dLon / 2);
 
-        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * 2.0 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
 
-    // -------------------------------------------------------------
-    // MAPPERS — no se tocó nada
-    // -------------------------------------------------------------
+    // =========================================================
+    // MAPPERS
+    // =========================================================
     private RutaDTO toRutaDTO(Ruta ruta) {
         RutaDTO dto = new RutaDTO();
         dto.setId(ruta.getId());
         dto.setSolicitudId(ruta.getSolicitudId());
+
         dto.setOrigenDireccion(ruta.getOrigenDireccion());
         dto.setOrigenLatitud(ruta.getOrigenLatitud());
         dto.setOrigenLongitud(ruta.getOrigenLongitud());
+
         dto.setDestinoDireccion(ruta.getDestinoDireccion());
         dto.setDestinoLatitud(ruta.getDestinoLatitud());
         dto.setDestinoLongitud(ruta.getDestinoLongitud());
+
         dto.setDistanciaTotalKmEstimada(ruta.getDistanciaTotalKmEstimada());
         dto.setTiempoTotalHorasEstimada(ruta.getTiempoTotalHorasEstimada());
         dto.setCostoTotalEstimado(ruta.getCostoTotalEstimado());
+
         dto.setDistanciaTotalKmReal(ruta.getDistanciaTotalKmReal());
         dto.setTiempoTotalHorasReal(ruta.getTiempoTotalHorasReal());
         dto.setCostoTotalReal(ruta.getCostoTotalReal());
 
-        if (ruta.getEstado() != null) dto.setEstado(ruta.getEstado().name());
-        dto.setFechaCreacion(ruta.getFechaCreacion());
+        if (ruta.getEstado() != null) {
+            dto.setEstado(ruta.getEstado().name());
+        }
 
         if (ruta.getTramos() != null) {
             dto.setTramos(
-                    ruta.getTramos()
-                            .stream()
+                    ruta.getTramos().stream()
                             .map(this::toTramoDTO)
                             .collect(Collectors.toList())
             );
@@ -364,20 +438,26 @@ public class RutaServiceImpl implements RutaService {
         TramoDTO dto = new TramoDTO();
         dto.setId(tramo.getId());
         dto.setOrden(tramo.getOrden());
+
         dto.setOrigenDescripcion(tramo.getOrigenDescripcion());
         dto.setOrigenLatitud(tramo.getOrigenLatitud());
         dto.setOrigenLongitud(tramo.getOrigenLongitud());
+
         dto.setDestinoDescripcion(tramo.getDestinoDescripcion());
         dto.setDestinoLatitud(tramo.getDestinoLatitud());
         dto.setDestinoLongitud(tramo.getDestinoLongitud());
+
         dto.setDistanciaKmEstimada(tramo.getDistanciaKmEstimada());
         dto.setTiempoHorasEstimada(tramo.getTiempoHorasEstimada());
         dto.setHorasEsperaDepositoEstimada(tramo.getHorasEsperaDepositoEstimada());
+
         dto.setDistanciaKmReal(tramo.getDistanciaKmReal());
         dto.setTiempoHorasReal(tramo.getTiempoHorasReal());
         dto.setHorasEsperaDepositoReal(tramo.getHorasEsperaDepositoReal());
 
-        if (tramo.getEstado() != null) dto.setEstado(tramo.getEstado().name());
+        if (tramo.getEstado() != null) {
+            dto.setEstado(tramo.getEstado().name());
+        }
 
         return dto;
     }

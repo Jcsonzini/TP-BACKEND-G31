@@ -11,4 +11,5 @@ public interface RutaRepository extends JpaRepository<Ruta, Long> {
      * Buscar todas las rutas asociadas a una solicitud de ms-solicitudes.
      */
     List<Ruta> findBySolicitudId(Long solicitudId);
+    void deleteBySolicitudIdAndIdNot(Long solicitudId, Long id);
 }

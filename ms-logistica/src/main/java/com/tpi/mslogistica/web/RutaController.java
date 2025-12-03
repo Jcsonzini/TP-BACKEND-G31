@@ -34,7 +34,7 @@ public class RutaController {
     public ResponseEntity<List<RutaDTO>> generarTentativas(@RequestBody RutaCreateRequest request) {
 
         // Por ahora siempre generamos 3 rutas tentativas
-        List<RutaDTO> rutas = rutaService.generarRutasTentativas(request, 3);
+        List<RutaDTO> rutas = rutaService.generarRutasTentativas(request, 4);
 
         return ResponseEntity
                 .status(HttpStatus.CREATED)
@@ -61,5 +61,12 @@ public class RutaController {
     public ResponseEntity<List<RutaDTO>> listarPorSolicitud(@PathVariable Long solicitudId) {
         List<RutaDTO> lista = rutaService.listarPorSolicitud(solicitudId);
         return ResponseEntity.ok(lista);
+    }
+
+    @PostMapping("/{rutaId}/seleccionar")
+    @Operation(summary = "Seleccionar una ruta tentativa y descartar las otras")
+    public ResponseEntity<RutaDTO> seleccionarRuta(@PathVariable Long rutaId) {
+        RutaDTO seleccionada = rutaService.seleccionarRuta(rutaId);
+        return ResponseEntity.ok(seleccionada);
     }
 }

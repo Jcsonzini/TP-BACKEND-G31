@@ -19,6 +19,16 @@
 *.tar.gz
 *.rar
 
+# Local OSRM assets
+osrm/
+osrm-data/
+
+# Maven build output
+ms-catalogo/target/
+ms-gateway/target/
+ms-logistica/target/
+ms-solicitudes/target/
+
 # virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
 replay_pid*

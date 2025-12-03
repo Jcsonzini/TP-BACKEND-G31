@@ -1,5 +1,8 @@
 package com.tpi.mslogistica.service.impl;
 
+import com.tpi.mslogistica.client.SolicitudesClient;
+import com.tpi.mslogistica.client.dto.FinalizarOperacionRequest;
+import com.tpi.mslogistica.domain.EstadoRuta;
 import com.tpi.mslogistica.domain.EstadoTramo;
 import com.tpi.mslogistica.domain.Ruta;
 import com.tpi.mslogistica.domain.Tramo;
@@ -14,6 +17,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 
@@ -23,6 +27,7 @@ public class TramoServiceImpl implements TramoService {
 
     private final TramoRepository tramoRepository;
     private final RutaRepository rutaRepository;
+    private final SolicitudesClient solicitudesClient;
 
     @Override
     public TramoDTO obtenerPorId(Long id) {
@@ -31,6 +36,15 @@ public class TramoServiceImpl implements TramoService {
             .orElseThrow(() -> new NoSuchElementException("Tramo no encontrado: " + tramoId));
         Tramo nonNullTramo = Objects.requireNonNull(tramo, "El tramo recuperado no puede ser nulo");
         return toDTO(nonNullTramo);
+    }
+
+    @Override
+    public List<TramoDTO> listarPorRuta(Long rutaId) {
+        Long nonNullRutaId = Objects.requireNonNull(rutaId, "El id de la ruta no puede ser nulo");
+        return tramoRepository.findByRuta_IdOrderByOrdenAsc(nonNullRutaId)
+                .stream()
+                .map(this::toDTO)
+                .toList();
     }
 
     @Override
@@ -80,6 +94,102 @@ public class TramoServiceImpl implements TramoService {
         return toDTO(guardado);
     }
 
+    // ================== A) INICIAR TRAMO ==================
+
+    @Override
+    public TramoDTO iniciarTramo(Long tramoId) {
+        Tramo tramo = tramoRepository.findById(tramoId)
+                .orElseThrow(() -> new IllegalArgumentException("Tramo no encontrado: " + tramoId));
+
+        // RN: solo se puede iniciar si está PENDIENTE
+        if (tramo.getEstado() != EstadoTramo.PENDIENTE) {
+            throw new IllegalStateException("Solo se pueden iniciar tramos en estado PENDIENTE");
+        }
+
+        Ruta ruta = tramo.getRuta();
+        if (ruta == null || ruta.getId() == null) {
+            throw new IllegalStateException("El tramo no tiene ruta asociada");
+        }
+
+        // Refrescamos la ruta desde la BD para asegurarnos de tener todos los tramos
+        Long rutaId = ruta.getId();
+        ruta = rutaRepository.findById(rutaId)
+                .orElseThrow(() -> new NoSuchElementException("Ruta no encontrada: " + rutaId));
+
+        // RN: no puede haber otro tramo EN_CURSO en la misma ruta
+        boolean hayOtroEnCurso = ruta.getTramos() != null && ruta.getTramos().stream()
+                .anyMatch(t -> !t.getId().equals(tramo.getId())
+                        && t.getEstado() == EstadoTramo.EN_CURSO);
+
+        if (hayOtroEnCurso) {
+            throw new IllegalStateException("No se puede iniciar un tramo mientras otro tramo de la ruta está EN_CURSO");
+        }
+
+        // RN: si no es el primer tramo, el anterior debe estar FINALIZADO
+        if (tramo.getOrden() != null && tramo.getOrden() > 1) {
+            Tramo anterior = buscarTramoAnterior(ruta, tramo);
+            if (anterior == null) {
+                throw new IllegalStateException("No se encontró el tramo anterior en la ruta");
+            }
+            if (anterior.getEstado() != EstadoTramo.FINALIZADO) {
+                throw new IllegalStateException(
+                        "Solo se puede iniciar el tramo " + tramo.getOrden()
+                                + " cuando el tramo anterior está FINALIZADO");
+            }
+        }
+
+        // Lógica de inicio "real": set EN_CURSO, fechaInicioReal, posible estadía
+        iniciarTramoInterno(tramo, ruta);
+
+        tramoRepository.save(tramo);
+        rutaRepository.save(ruta); // por si en el futuro ajustás algo a nivel ruta
+
+        return toDTO(tramo);
+    }
+
+
+    // ================== B) FINALIZAR TRAMO ==================
+
+    @Override
+    public TramoDTO finalizarTramo(Long tramoId) {
+
+        Tramo tramo = tramoRepository.findById(tramoId)
+                .orElseThrow(() -> new IllegalArgumentException("Tramo no encontrado: " + tramoId));
+
+        // RN: solo se puede finalizar si está EN_CURSO
+        if (tramo.getEstado() != EstadoTramo.EN_CURSO) {
+            throw new IllegalStateException("Solo se pueden finalizar tramos en estado EN_CURSO");
+        }
+
+        Ruta ruta = tramo.getRuta();
+        if (ruta == null || ruta.getId() == null) {
+            throw new IllegalStateException("El tramo no tiene ruta asociada");
+        }
+
+        Long rutaId = ruta.getId();
+        ruta = rutaRepository.findById(rutaId)
+                .orElseThrow(() -> new NoSuchElementException("Ruta no encontrada: " + rutaId));
+
+        // 1) Finalizar tramo (cambia estado, fechaFinReal, tiempoHorasReal, etc.)
+        finalizarTramoInterno(tramo);
+
+        // 2) Recalcular totales reales de la ruta (devuelve true si la ruta quedó COMPLETADA)
+        boolean rutaCompletada = recalcularTotalesRuta(ruta);
+
+        // 3) Guardar tramo y ruta
+        tramoRepository.save(tramo);
+        rutaRepository.save(ruta);
+
+        // 4) Si todos los tramos están finalizados → notificar a ms-solicitudes
+        if (rutaCompletada) {
+            notificarSolicitudCompletada(ruta);
+        }
+
+        return toDTO(tramo);
+    }
+
+
+
     // ================== LÓGICA DE NEGOCIO ==================
 
     private void iniciarTramo(Tramo tramo) {
@@ -94,32 +204,57 @@ public class TramoServiceImpl implements TramoService {
         if (tramo.getFechaInicioReal() != null && tramo.getFechaFinReal() != null) {
             Duration dur = Duration.between(tramo.getFechaInicioReal(), tramo.getFechaFinReal());
             double horas = dur.toMinutes() / 60.0;
+            if (horas < 0) horas = 0.0;
             tramo.setTiempoHorasReal(horas);
         }
+
         // horasEsperaDepositoReal la podés calcular más adelante en base a tu modelo de depósitos
+        // NOTA: acá NO se llama a setCostoReal porque el tramo no tiene ese campo
     }
 
-    /**
-     * Recalcula la distancia, tiempo y costo reales de toda la ruta
-     * a partir de los tramos. Por ahora sumamos lo que haya cargado.
-     */
-    private void recalcularTotalesRuta(Ruta ruta) {
-        Ruta nonNullRuta = Objects.requireNonNull(ruta, "La ruta asociada no puede ser nula");
-        Long rutaId = Objects.requireNonNull(nonNullRuta.getId(), "El id de la ruta no puede ser nulo");
+    private void notificarSolicitudCompletada(Ruta ruta) {
 
-        Ruta r = rutaRepository.findById(rutaId)
-                .orElseThrow(() -> new NoSuchElementException("Ruta no encontrada: " + rutaId));
+        Long solicitudId = ruta.getSolicitudId(); // ajustá al nombre real del campo
+        if (solicitudId == null) {
+            throw new IllegalStateException(
+                    "La ruta " + ruta.getId() + " no tiene solicitudId asociado, no se puede notificar"
+            );
+        }
+
+        FinalizarOperacionRequest request = new FinalizarOperacionRequest();
+        request.setRutaId(ruta.getId());
+        request.setTiempoRealHoras(ruta.getTiempoTotalHorasReal());
+        request.setCostoTotalReal(ruta.getCostoTotalReal());
+
+        solicitudesClient.finalizarOperacion(solicitudId, request);
+    }
+
+
+    /**
+     * Recalcula la distancia y el tiempo reales de toda la ruta a partir de los tramos.
+     */
+    private boolean recalcularTotalesRuta(Ruta ruta) {
+        Objects.requireNonNull(ruta, "La ruta asociada no puede ser nula");
+        Objects.requireNonNull(ruta.getId(), "El id de la ruta no puede ser nulo");
 
         double distanciaRealTotal = 0.0;
         double tiempoRealTotal = 0.0;
+        boolean todosFinalizados = true;
 
-        for (Tramo t : r.getTramos()) {
+        for (Tramo t : ruta.getTramos()) {
+
+            if (t.getEstado() != EstadoTramo.FINALIZADO) {
+                todosFinalizados = false;
+            }
+
+            // Distancia
             if (t.getDistanciaKmReal() != null) {
                 distanciaRealTotal += t.getDistanciaKmReal();
             } else if (t.getDistanciaKmEstimada() != null) {
                 distanciaRealTotal += t.getDistanciaKmEstimada();
             }
 
+            // Tiempo
             if (t.getTiempoHorasReal() != null) {
                 tiempoRealTotal += t.getTiempoHorasReal();
             } else if (t.getTiempoHorasEstimada() != null) {
@@ -127,14 +262,86 @@ public class TramoServiceImpl implements TramoService {
             }
         }
 
-        r.setDistanciaTotalKmReal(distanciaRealTotal);
-        r.setTiempoTotalHorasReal(tiempoRealTotal);
+        ruta.setDistanciaTotalKmReal(distanciaRealTotal);
+        ruta.setTiempoTotalHorasReal(tiempoRealTotal);
 
-        // TODO: calcular costoTotalReal usando tarifas, estadías, etc.
-        // Por ahora lo dejamos nulo o igual al estimado
-        r.setCostoTotalReal(r.getCostoTotalEstimado());
+        if (todosFinalizados) {
+            ruta.setEstado(EstadoRuta.COMPLETADA); // ajustá con tu enum/propiedad real
+        }
 
-        rutaRepository.save(r);
+        // Por ahora dejamos costoReal igual al estimado
+        ruta.setCostoTotalReal(ruta.getCostoTotalEstimado());
+
+        return todosFinalizados;
+    }
+
+
+
+
+    private void iniciarTramoInterno(Tramo tramo, Ruta ruta) {
+        tramo.setEstado(EstadoTramo.EN_CURSO);
+        LocalDateTime ahora = LocalDateTime.now();
+        tramo.setFechaInicioReal(ahora);
+
+        // Cálculo de estadía real en depósito (si aplica)
+        // Regla: si este tramo SALE de un depósito, la estadía es el tiempo
+        // entre la llegada real previa y este inicio.
+        Tramo tramoAnterior = buscarTramoAnterior(ruta, tramo);
+
+        if (tramoAnterior != null
+                && tramoAnterior.getFechaFinReal() != null
+                && esDeposito(tramo.getOrigenDescripcion())) {
+
+            Duration diff = Duration.between(tramoAnterior.getFechaFinReal(), ahora);
+            double horas = diff.toMinutes() / 60.0;
+
+            if (horas < 0) horas = 0.0;
+
+            tramo.setHorasEsperaDepositoReal(horas);
+        } else {
+            tramo.setHorasEsperaDepositoReal(0.0);
+        }
+    }
+
+    private void finalizarTramoInterno(Tramo tramo) {
+        tramo.setEstado(EstadoTramo.FINALIZADO);
+        LocalDateTime ahora = LocalDateTime.now();
+        tramo.setFechaFinReal(ahora);
+
+        if (tramo.getFechaInicioReal() != null) {
+            Duration d = Duration.between(tramo.getFechaInicioReal(), tramo.getFechaFinReal());
+            double horas = d.toMinutes() / 60.0;
+            if (horas < 0) horas = 0.0;
+            tramo.setTiempoHorasReal(horas);
+        }
+
+        // Por ahora usamos la misma distancia que la estimada; cuando tengamos datos reales reemplazamos esto.
+        tramo.setDistanciaKmReal(tramo.getDistanciaKmEstimada());
+
+        // En esta iteración no persistimos costo real a nivel tramo; lo calcularemos cuando el modelo lo soporte.
+    }
+
+    private Tramo buscarTramoAnterior(Ruta ruta, Tramo tramoActual) {
+        if (ruta.getTramos() == null || ruta.getTramos().isEmpty()) {
+            return null;
+        }
+        return ruta.getTramos().stream()
+                .filter(t -> t.getOrden() != null
+                        && tramoActual.getOrden() != null
+                        && t.getOrden() == tramoActual.getOrden() - 1)
+                .findFirst()
+                .orElse(null);
+    }
+
+    /**
+     * Heurística simple: asumimos que las descripciones de depósitos
+     * contienen la palabra "Depósito" o algo similar.
+     * Ajustá esto si tenés un modelo más rico (por ID de depósito, etc.).
+     */
+    private boolean esDeposito(String descripcion) {
+        if (descripcion == null) return false;
+        String lower = descripcion.toLowerCase();
+        return lower.contains("depósito") || lower.contains("deposito");
     }
 
     // ================== MAPPER ==================

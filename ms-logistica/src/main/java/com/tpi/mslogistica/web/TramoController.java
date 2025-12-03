@@ -42,4 +42,19 @@ public class TramoController {
         TramoDTO dto = tramoService.cambiarEstado(id, request);
         return ResponseEntity.ok(dto);
     }
+
+    @PutMapping("/{id}/iniciar")
+    @Operation(summary = "Iniciar un tramo (transportista comienza el recorrido)")
+    public ResponseEntity<TramoDTO> iniciarTramo(@PathVariable Long id) {
+        TramoDTO dto = tramoService.iniciarTramo(id);
+        return ResponseEntity.ok(dto);
+    }
+
+    @PutMapping("/{id}/finalizar")
+    @Operation(summary = "Finalizar un tramo (transportista termina el recorrido)")
+    public ResponseEntity<TramoDTO> finalizarTramo(@PathVariable Long id) {
+        TramoDTO dto = tramoService.finalizarTramo(id);
+        return ResponseEntity.ok(dto);
+    }
+
 }
