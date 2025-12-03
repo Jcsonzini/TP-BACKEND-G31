@@ -68,7 +68,7 @@ public class RutaServiceImpl implements RutaService {
         ruta.setDistanciaTotalKmEstimada(distanciaKm);
         ruta.setTiempoTotalHorasEstimada(tiempoHoras);
         ruta.setCostoTotalEstimado(costo);
-        ruta.setEstado(EstadoRuta.PLANIFICADA);
+        ruta.setEstado(EstadoRuta.TENTATIVA); // se confirma recién al seleccionar
         ruta.setTramos(new ArrayList<>());
 
         Ruta rutaGuardada = rutaRepository.save(ruta);
@@ -290,7 +290,7 @@ public class RutaServiceImpl implements RutaService {
         ruta.setDestinoLatitud(dLat);
         ruta.setDestinoLongitud(dLon);
 
-        ruta.setEstado(EstadoRuta.PLANIFICADA);
+        ruta.setEstado(EstadoRuta.TENTATIVA); // permanece tentativa hasta la selección
         ruta.setTramos(new ArrayList<>());
 
         Ruta rutaGuardada = rutaRepository.save(ruta);
