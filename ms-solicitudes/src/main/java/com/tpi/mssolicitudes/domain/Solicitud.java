@@ -62,18 +62,18 @@ public class Solicitud {
     private Double costoFinal;
     private Double tiempoRealHoras;
 
-    
-
-    /**
-     * Tarifa final aplicada a la solicitud (se calculará al completar la operación).
-     */
-    private Double tarifa;
-
     /**
      * ID de la ruta en ms-logistica asociada a esta solicitud (cuando ya está calculada).
      */
     @Column(name = "ruta_asignada_id")
     private Long rutaAsignadaId;
+
+    /**
+     * ID de la tarifa (ParametrosSistema en ms-catalogo) asociada a esta solicitud.
+     * Define los costos de transporte, estadía, descarga, etc.
+     */
+    @Column(name = "tarifa_id")
+    private Long tarifaId;
 
     @CreationTimestamp
     @Column(name = "fecha_creacion", updatable = false)

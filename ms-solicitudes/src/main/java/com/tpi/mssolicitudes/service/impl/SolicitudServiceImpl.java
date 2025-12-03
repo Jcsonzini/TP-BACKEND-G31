@@ -8,6 +8,7 @@ import com.tpi.mssolicitudes.dto.ClienteCreateRequest;
 import com.tpi.mssolicitudes.dto.ContenedorCreateRequest;
 import com.tpi.mssolicitudes.dto.EstadoContenedor;
 import com.tpi.mssolicitudes.dto.EstadoContenedorDTO;
+import com.tpi.mssolicitudes.dto.ParametrosSistemaDTO;
 import com.tpi.mssolicitudes.dto.SolicitudCreateRequest;
 import com.tpi.mssolicitudes.dto.SolicitudDTO;
 import com.tpi.mssolicitudes.dto.TramoResumenDTO;
@@ -81,7 +82,17 @@ public class SolicitudServiceImpl implements SolicitudService {
         );
         solicitud.setTiempoEstimadoHoras(tiempoEstimado);
         solicitud.setTiempoRealHoras(null);
-        solicitud.setTarifa(null);
+
+        // Asignar tarifa: si se proporciona una ID, usarla; si no, usar la tarifa por defecto
+        if (request.getTarifaId() != null) {
+            solicitud.setTarifaId(request.getTarifaId());
+        } else {
+            // Obtener la tarifa por defecto (primera tarifa activa)
+            ParametrosSistemaDTO tarifaDefecto = catalogoClient.obtenerTarifaPorDefecto();
+            if (tarifaDefecto != null) {
+                solicitud.setTarifaId(tarifaDefecto.getId());
+            }
+        }
 
         solicitud.setFechaCreacion(LocalDateTime.now());
         solicitud.setFechaUltimaActualizacion(LocalDateTime.now());
@@ -114,14 +125,12 @@ public class SolicitudServiceImpl implements SolicitudService {
             existente.setEstado(EstadoSolicitud.valueOf(dto.getEstado()));
         }
 
-        existente.setCostoEstimado(dto.getCostoEstimado());
-        existente.setTiempoEstimadoHoras(dto.getTiempoEstimadoHoras());
-        existente.setCostoFinal(dto.getCostoFinal());
-        existente.setTiempoRealHoras(dto.getTiempoRealHoras());
+        // Parsear costos y tiempos desde String si vienen formateados
+        existente.setCostoEstimado(parseFormattedValue(dto.getCostoEstimado()));
+        existente.setTiempoEstimadoHoras(parseFormattedValue(dto.getTiempoEstimadoHoras()));
+        existente.setCostoFinal(parseFormattedValue(dto.getCostoFinal()));
+        existente.setTiempoRealHoras(parseFormattedValue(dto.getTiempoRealHoras()));
         existente.setRutaAsignadaId(dto.getRutaAsignadaId());
-        existente.setTarifa(dto.getTarifa());
-
-
         existente.setFechaUltimaActualizacion(LocalDateTime.now());
 
         Solicitud actualizada = solicitudRepository.save(existente);
@@ -235,6 +244,14 @@ public class SolicitudServiceImpl implements SolicitudService {
         solicitud.setRutaAsignadaId(nonNullRutaId);
         solicitud.setEstado(EstadoSolicitud.PLANIFICADA);
         solicitud.setFechaUltimaActualizacion(LocalDateTime.now());
+        
+        // Asignar costo estimado y tiempo desde la ruta seleccionada
+        if (rutaSeleccionada != null) {
+            Double costoEst = parseFormattedValue(rutaSeleccionada.getCostoTotalEstimado());
+            Double tiempoEst = parseFormattedValue(rutaSeleccionada.getTiempoTotalHorasEstimada());
+            solicitud.setCostoEstimado(costoEst);
+            solicitud.setTiempoEstimadoHoras(tiempoEst);
+        }
 
         Solicitud guardada = solicitudRepository.save(solicitud);
         return toDTO(guardada);
@@ -459,22 +476,24 @@ public class SolicitudServiceImpl implements SolicitudService {
         }
 
         dto.setOrigenDireccion(entity.getOrigenDireccion());
-        dto.setOrigenLatitud(entity.getOrigenLatitud());
-        dto.setOrigenLongitud(entity.getOrigenLongitud());
+        // Truncar coordenadas a 3 decimales
+        dto.setOrigenLatitud(truncarDecimales(entity.getOrigenLatitud(), 3));
+        dto.setOrigenLongitud(truncarDecimales(entity.getOrigenLongitud(), 3));
 
         dto.setDestinoDireccion(entity.getDestinoDireccion());
-        dto.setDestinoLatitud(entity.getDestinoLatitud());
-        dto.setDestinoLongitud(entity.getDestinoLongitud());
+        // Truncar coordenadas a 3 decimales
+        dto.setDestinoLatitud(truncarDecimales(entity.getDestinoLatitud(), 3));
+        dto.setDestinoLongitud(truncarDecimales(entity.getDestinoLongitud(), 3));
 
         dto.setEstado(entity.getEstado() != null ? entity.getEstado().name() : null);
 
-        dto.setCostoEstimado(entity.getCostoEstimado());
-        dto.setTiempoEstimadoHoras(entity.getTiempoEstimadoHoras());
-        dto.setCostoFinal(entity.getCostoFinal());
-        dto.setTiempoRealHoras(entity.getTiempoRealHoras());
-        dto.setTarifa(entity.getTarifa());
-
+        // Formatear costos con $ y tiempos con h
+        dto.setCostoEstimado(formatearCosto(truncarDecimales(entity.getCostoEstimado(), 2)));
+        dto.setTiempoEstimadoHoras(formatearTiempo(truncarDecimales(entity.getTiempoEstimadoHoras(), 3)));
+        dto.setCostoFinal(formatearCosto(truncarDecimales(entity.getCostoFinal(), 2)));
+        dto.setTiempoRealHoras(formatearTiempo(truncarDecimales(entity.getTiempoRealHoras(), 3)));
         dto.setRutaAsignadaId(entity.getRutaAsignadaId());
+        dto.setTarifaId(entity.getTarifaId());
         dto.setFechaCreacion(entity.getFechaCreacion());
         dto.setFechaUltimaActualizacion(entity.getFechaUltimaActualizacion());
 
@@ -614,5 +633,64 @@ public class SolicitudServiceImpl implements SolicitudService {
         return dto;
     }
 
+    /**
+     * Trunca un valor Double a un número específico de decimales.
+     * La truncación es hacia abajo (floor), no redondeo.
+     * 
+     * @param valor el valor a truncar
+     * @param decimales número de decimales a mantener
+     * @return valor truncado, o null si el valor de entrada es null
+     */
+    private Double truncarDecimales(Double valor, int decimales) {
+        if (valor == null) {
+            return null;
+        }
+        double escala = Math.pow(10, decimales);
+        return Math.floor(valor * escala) / escala;
+    }
 
+    /**
+     * Extrae el valor numérico de una cadena formateada.
+     * Ejemplos: "$104365.02" -> 104365.02, "695.767 km" -> 695.767, "7.383 h" -> 7.383
+     * 
+     * @param valor la cadena formateada
+     * @return el valor numérico como Double, o null si la cadena es null/vacía
+     */
+    private Double parseFormattedValue(String valor) {
+        if (valor == null || valor.isEmpty()) {
+            return null;
+        }
+        try {
+            // Eliminar todos los caracteres que no sean dígitos o punto
+            String numerico = valor.replaceAll("[^0-9.]", "");
+            if (numerico.isEmpty()) {
+                return null;
+            }
+            return Double.parseDouble(numerico);
+        } catch (NumberFormatException e) {
+            System.err.println("No se pudo parsear el valor formateado: " + valor);
+            return null;
+        }
+    }
+
+    /**
+     * Formatea costo con símbolo $ al inicio y 2 decimales
+     */
+    private String formatearCosto(Double valor) {
+        if (valor == null) {
+            return null;
+        }
+        return String.format("$%.2f", valor);
+    }
+
+    /**
+     * Formatea tiempo con unidad "h" y 3 decimales
+     */
+    private String formatearTiempo(Double valor) {
+        if (valor == null) {
+            return null;
+        }
+        return String.format("%.3f h", valor);
+    }
 }
+

@@ -19,13 +19,15 @@ public class RutaDTO {
     private Double destinoLatitud;
     private Double destinoLongitud;
 
-    private Double distanciaTotalKmEstimada;
-    private Double tiempoTotalHorasEstimada;
-    private Double costoTotalEstimado;
+    // Estimaciones (formateadas a 3 decimales)
+    private String distanciaTotalKmEstimada;  // ej: "245.123 km"
+    private String tiempoTotalHorasEstimada;  // ej: "3.456 h"
+    private String costoTotalEstimado;        // ej: "$12345.67"
 
-    private Double distanciaTotalKmReal;
-    private Double tiempoTotalHorasReal;
-    private Double costoTotalReal;
+    // Valores reales (formateados)
+    private String distanciaTotalKmReal;      // ej: "240.789 km"
+    private String tiempoTotalHorasReal;      // ej: "3.234 h"
+    private String costoTotalReal;            // ej: "$12456.89"
 
     private String estado;
     private LocalDateTime fechaCreacion;

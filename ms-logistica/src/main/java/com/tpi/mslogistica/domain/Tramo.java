@@ -27,6 +27,10 @@ public class Tramo {
     @Column(nullable = false)
     private Integer orden;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private TipoTramo tipo; // ORIGEN, INTERMEDIO, DESTINO
+
     // Puntos del tramo
     @Column(nullable = false)
     private String origenDescripcion;
@@ -42,11 +46,13 @@ public class Tramo {
     private Double distanciaKmEstimada;
     private Double tiempoHorasEstimada;
     private Double horasEsperaDepositoEstimada; // si aplica
+    private Double costoAproximado; // costo estimado del tramo
 
     // Valores reales
     private Double distanciaKmReal;
     private Double tiempoHorasReal;
     private Double horasEsperaDepositoReal;
+    private Double costoReal; // costo real del tramo
 
     // Camión asignado al tramo (viene de ms-catalogo)
     @Column(name = "camion_id")

@@ -63,11 +63,14 @@ public class RutaServiceImpl implements RutaService {
 
         double distanciaKm = osrmRoute.getDistance() / 1000.0;
         double tiempoHoras = osrmRoute.getDuration() / 3600.0;
-        double costo = distanciaKm * 150.0; // costo dummy: $150/km
+        // El costoEstimado se calcula como: distancia × costoBaseKm del camión
+        // TODO: Cuando se asigne un camión específico, usar su costoBaseKm real
+        // Por ahora usamos $150/km como dummy estimado
+        double costoEstimado = distanciaKm * 150.0;
 
         ruta.setDistanciaTotalKmEstimada(distanciaKm);
         ruta.setTiempoTotalHorasEstimada(tiempoHoras);
-        ruta.setCostoTotalEstimado(costo);
+        ruta.setCostoTotalEstimado(costoEstimado);
         ruta.setEstado(EstadoRuta.TENTATIVA); // se confirma recién al seleccionar
         ruta.setTramos(new ArrayList<>());
 
@@ -76,6 +79,7 @@ public class RutaServiceImpl implements RutaService {
         Tramo tramo = new Tramo();
         tramo.setRuta(rutaGuardada);
         tramo.setOrden(1);
+        tramo.setTipo(com.tpi.mslogistica.domain.TipoTramo.ORIGEN);
 
         tramo.setOrigenDescripcion(request.getOrigenDireccion());
         tramo.setOrigenLatitud(request.getOrigenLatitud());
@@ -87,6 +91,8 @@ public class RutaServiceImpl implements RutaService {
 
         tramo.setDistanciaKmEstimada(distanciaKm);
         tramo.setTiempoHorasEstimada(tiempoHoras);
+        tramo.setCostoAproximado(costoEstimado);
+        tramo.setHorasEsperaDepositoEstimada(0.0); // Sin espera en origen
         tramo.setEstado(EstadoTramo.PENDIENTE);
 
         tramoRepository.save(tramo);
@@ -336,7 +342,19 @@ public class RutaServiceImpl implements RutaService {
 
             Tramo tramo = new Tramo();
             tramo.setRuta(rutaGuardada);
-            tramo.setOrden(orden++);
+            tramo.setOrden(orden);
+            
+            // Determinar tipo de tramo
+            com.tpi.mslogistica.domain.TipoTramo tipoTramo;
+            if (orden == 1) {
+                tipoTramo = com.tpi.mslogistica.domain.TipoTramo.ORIGEN;
+            } else if (orden == puntos.size() - 1) {
+                tipoTramo = com.tpi.mslogistica.domain.TipoTramo.DESTINO;
+            } else {
+                tipoTramo = com.tpi.mslogistica.domain.TipoTramo.INTERMEDIO;
+            }
+            tramo.setTipo(tipoTramo);
+            orden++;
 
             tramo.setOrigenDescripcion(p1.descripcion);
             tramo.setOrigenLatitud(p1.latitud);
@@ -348,6 +366,30 @@ public class RutaServiceImpl implements RutaService {
 
             tramo.setDistanciaKmEstimada(distanciaKm);
             tramo.setTiempoHorasEstimada(tiempoHoras);
+            
+            // Calcular horas de espera estimadas y costo de estadía para depósitos intermedios
+            if (tipoTramo == com.tpi.mslogistica.domain.TipoTramo.INTERMEDIO) {
+                // Estimación: 1 hora de espera en depósito intermedio
+                tramo.setHorasEsperaDepositoEstimada(1.0);
+                
+                // Agregar costo de estadía del depósito de destino (depósito intermedio)
+                // Obtener el depósito que corresponde a este tramo
+                Deposito depositoDestino = depositosIntermedios.stream()
+                    .filter(d -> d.getNombre().equals(p2.descripcion))
+                    .findFirst()
+                    .orElse(null);
+                
+                if (depositoDestino != null) {
+                    // Costo de estadía prorrateado por 1 hora (suponemos día = 24 horas)
+                    double costoEstadiaProrrateo = (depositoDestino.getCostoEstadiaDiaria() / 24.0) * 1.0;
+                    costo += costoEstadiaProrrateo;
+                }
+                tramo.setCostoAproximado(costo);
+            } else {
+                tramo.setHorasEsperaDepositoEstimada(0.0);
+                tramo.setCostoAproximado(costo);
+            }
+            
             tramo.setEstado(EstadoTramo.PENDIENTE);
 
             tramoRepository.save(tramo);
@@ -411,13 +453,13 @@ public class RutaServiceImpl implements RutaService {
         dto.setDestinoLatitud(ruta.getDestinoLatitud());
         dto.setDestinoLongitud(ruta.getDestinoLongitud());
 
-        dto.setDistanciaTotalKmEstimada(ruta.getDistanciaTotalKmEstimada());
-        dto.setTiempoTotalHorasEstimada(ruta.getTiempoTotalHorasEstimada());
-        dto.setCostoTotalEstimado(ruta.getCostoTotalEstimado());
+        dto.setDistanciaTotalKmEstimada(formatearDistancia(ruta.getDistanciaTotalKmEstimada()));
+        dto.setTiempoTotalHorasEstimada(formatearTiempo(ruta.getTiempoTotalHorasEstimada()));
+        dto.setCostoTotalEstimado(formatearCosto(ruta.getCostoTotalEstimado()));
 
-        dto.setDistanciaTotalKmReal(ruta.getDistanciaTotalKmReal());
-        dto.setTiempoTotalHorasReal(ruta.getTiempoTotalHorasReal());
-        dto.setCostoTotalReal(ruta.getCostoTotalReal());
+        dto.setDistanciaTotalKmReal(formatearDistancia(ruta.getDistanciaTotalKmReal()));
+        dto.setTiempoTotalHorasReal(formatearTiempo(ruta.getTiempoTotalHorasReal()));
+        dto.setCostoTotalReal(formatearCosto(ruta.getCostoTotalReal()));
 
         if (ruta.getEstado() != null) {
             dto.setEstado(ruta.getEstado().name());
@@ -447,18 +489,52 @@ public class RutaServiceImpl implements RutaService {
         dto.setDestinoLatitud(tramo.getDestinoLatitud());
         dto.setDestinoLongitud(tramo.getDestinoLongitud());
 
-        dto.setDistanciaKmEstimada(tramo.getDistanciaKmEstimada());
-        dto.setTiempoHorasEstimada(tramo.getTiempoHorasEstimada());
-        dto.setHorasEsperaDepositoEstimada(tramo.getHorasEsperaDepositoEstimada());
+        dto.setDistanciaKmEstimada(formatearDistancia(tramo.getDistanciaKmEstimada()));
+        dto.setTiempoHorasEstimada(formatearTiempo(tramo.getTiempoHorasEstimada()));
+        dto.setHorasEsperaDepositoEstimada(formatearTiempo(tramo.getHorasEsperaDepositoEstimada()));
 
-        dto.setDistanciaKmReal(tramo.getDistanciaKmReal());
-        dto.setTiempoHorasReal(tramo.getTiempoHorasReal());
-        dto.setHorasEsperaDepositoReal(tramo.getHorasEsperaDepositoReal());
+        dto.setDistanciaKmReal(formatearDistancia(tramo.getDistanciaKmReal()));
+        dto.setTiempoHorasReal(formatearTiempo(tramo.getTiempoHorasReal()));
+        dto.setHorasEsperaDepositoReal(formatearTiempo(tramo.getHorasEsperaDepositoReal()));
+
+        dto.setCamionId(tramo.getCamionId());
+        dto.setFechaInicioReal(tramo.getFechaInicioReal());
+        dto.setFechaFinReal(tramo.getFechaFinReal());
 
         if (tramo.getEstado() != null) {
             dto.setEstado(tramo.getEstado().name());
         }
 
         return dto;
+    }
+
+    /**
+     * Formatea distancia a 3 decimales con unidad "km"
+     */
+    private String formatearDistancia(Double valor) {
+        if (valor == null) {
+            return null;
+        }
+        return String.format("%.3f km", valor);
+    }
+
+    /**
+     * Formatea tiempo a 3 decimales con unidad "h"
+     */
+    private String formatearTiempo(Double valor) {
+        if (valor == null) {
+            return null;
+        }
+        return String.format("%.3f h", valor);
+    }
+
+    /**
+     * Formatea costo con símbolo $ al inicio
+     */
+    private String formatearCosto(Double valor) {
+        if (valor == null) {
+            return null;
+        }
+        return String.format("$%.2f", valor);
     }
 }

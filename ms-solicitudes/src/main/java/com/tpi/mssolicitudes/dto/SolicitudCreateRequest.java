@@ -20,4 +20,7 @@ public class SolicitudCreateRequest {
     private String destinoDireccion;
     private Double destinoLatitud;
     private Double destinoLongitud;
+
+    // Tarifa (si no se especifica, se asigna la tarifa por defecto)
+    private Long tarifaId;
 }

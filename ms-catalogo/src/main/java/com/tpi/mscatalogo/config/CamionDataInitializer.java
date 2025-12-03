@@ -122,6 +122,9 @@ public class CamionDataInitializer {
 		);
 
 		camionRepository.saveAll(camiones);
+		
+		// Log para verificar que se inicializaron los camiones
+		System.out.println("✓ Camiones inicializados: " + camionRepository.count());
     }
 }
 

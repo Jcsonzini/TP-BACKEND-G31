@@ -2,6 +2,7 @@ package com.tpi.mssolicitudes.client;
 
 import com.tpi.mssolicitudes.dto.ContenedorCreateRequest;
 import com.tpi.mssolicitudes.dto.ContenedorDTO;
+import com.tpi.mssolicitudes.dto.ParametrosSistemaDTO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -44,5 +45,30 @@ public class CatalogoClient {
             .retrieve()
             .bodyToMono(ContenedorDTO.class)
             .block();
+    }
+
+    public ParametrosSistemaDTO obtenerTarifaPorId(Long tarifaId) {
+        Long nonNullTarifaId = Objects.requireNonNull(tarifaId, "El ID de la tarifa no puede ser nulo");
+        String resolvedBaseUrl = Objects.requireNonNull(baseUrl, "La baseUrl de catálogo no puede ser nula");
+
+        return webClientBuilder.baseUrl(resolvedBaseUrl).build()
+            .get()
+            .uri(uriBuilder -> uriBuilder
+                .path("/api/parametros-sistema/{id}")
+                .build(nonNullTarifaId))
+            .retrieve()
+            .bodyToMono(ParametrosSistemaDTO.class)
+            .block();
+    }
+
+    public ParametrosSistemaDTO obtenerTarifaPorDefecto() {
+        String resolvedBaseUrl = Objects.requireNonNull(baseUrl, "La baseUrl de catálogo no puede ser nula");
+
+        return webClientBuilder.baseUrl(resolvedBaseUrl).build()
+            .get()
+            .uri("/api/parametros-sistema/activas")
+            .retrieve()
+            .bodyToFlux(ParametrosSistemaDTO.class)
+            .blockFirst();
     }
 }

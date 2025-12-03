@@ -27,15 +27,17 @@ public class SolicitudDTO {
     private String estado;
 
     // Costos y tiempos
-    private Double costoEstimado;
-    private Double tiempoEstimadoHoras;
+    private String costoEstimado;      // ej: "$104365.02"
+    private String tiempoEstimadoHoras; // ej: "7.283 h"
 
-    private Double costoFinal;
-    private Double tiempoRealHoras;
-    private Double tarifa;
+    private String costoFinal;         // ej: "$104365.02"
+    private String tiempoRealHoras;    // ej: "8.123 h"
 
     // Relación con ms-logistica
     private Long rutaAsignadaId;
+
+    // Relación con ms-catalogo (tarifa/parámetros sistema)
+    private Long tarifaId;
 
     // Auditoría
     private LocalDateTime fechaCreacion;

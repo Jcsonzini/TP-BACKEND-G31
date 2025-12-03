@@ -6,6 +6,7 @@ import com.tpi.mslogistica.domain.EstadoRuta;
 import com.tpi.mslogistica.domain.EstadoTramo;
 import com.tpi.mslogistica.domain.Ruta;
 import com.tpi.mslogistica.domain.Tramo;
+import com.tpi.mslogistica.domain.TipoTramo;
 import com.tpi.mslogistica.dto.AsignarCamionTramoRequest;
 import com.tpi.mslogistica.dto.CambioEstadoTramoRequest;
 import com.tpi.mslogistica.dto.TramoDTO;
@@ -277,7 +278,8 @@ public class TramoServiceImpl implements TramoService {
 
 
     /**
-     * Recalcula la distancia y el tiempo reales de toda la ruta a partir de los tramos.
+     * Recalcula la distancia, tiempo y costo reales de toda la ruta a partir de los tramos.
+     * El costo real incluye: costo de traslado (km × costoBaseKm) + costo de estadías en depósitos.
      */
     private boolean recalcularTotalesRuta(Ruta ruta) {
         Objects.requireNonNull(ruta, "La ruta asociada no puede ser nula");
@@ -285,6 +287,7 @@ public class TramoServiceImpl implements TramoService {
 
         double distanciaRealTotal = 0.0;
         double tiempoRealTotal = 0.0;
+        double costoRealTotal = 0.0;
         boolean todosFinalizados = true;
 
         for (Tramo t : ruta.getTramos()) {
@@ -294,9 +297,12 @@ public class TramoServiceImpl implements TramoService {
             }
 
             // Distancia
+            double distanciaKm = 0.0;
             if (t.getDistanciaKmReal() != null) {
+                distanciaKm = t.getDistanciaKmReal();
                 distanciaRealTotal += t.getDistanciaKmReal();
             } else if (t.getDistanciaKmEstimada() != null) {
+                distanciaKm = t.getDistanciaKmEstimada();
                 distanciaRealTotal += t.getDistanciaKmEstimada();
             }
 
@@ -306,19 +312,58 @@ public class TramoServiceImpl implements TramoService {
             } else if (t.getTiempoHorasEstimada() != null) {
                 tiempoRealTotal += t.getTiempoHorasEstimada();
             }
+
+            // Costo del tramo: traslado + estadía en depósito (si aplica)
+            double costoTramoReal = calcularCostoTramoReal(t, ruta, distanciaKm);
+            costoRealTotal += costoTramoReal;
         }
 
         ruta.setDistanciaTotalKmReal(distanciaRealTotal);
         ruta.setTiempoTotalHorasReal(tiempoRealTotal);
+        ruta.setCostoTotalReal(costoRealTotal);
 
         if (todosFinalizados) {
             ruta.setEstado(EstadoRuta.COMPLETADA); // ajustá con tu enum/propiedad real
         }
 
-        // Por ahora dejamos costoReal igual al estimado
-        ruta.setCostoTotalReal(ruta.getCostoTotalEstimado());
-
         return todosFinalizados;
+    }
+
+    /**
+     * Calcula el costo real de un tramo:
+     * = Costo de traslado (distancia × costoBaseKm del camión)
+     *   + Costo de estadía en depósito de origen (si es un depósito intermedio)
+     *
+     * NOTA: Para este MVP se usa costoBase = 150 $/km (dummy).
+     * En producción, consultar ms-catalogo para obtener los valores reales del camión.
+     */
+    private double calcularCostoTramoReal(Tramo tramo, Ruta ruta, double distanciaKm) {
+        double costoTraslado = 0.0;
+        double costoEstadia = 0.0;
+
+        // 1) Costo de traslado (distancia × costoBaseKm del camión)
+        // TODO: Consultar CatalogoClient con tramo.camionId para obtener costoBaseKm real
+        double costoBaseKmCamion = 150.0; // dummy: $150/km
+        costoTraslado = distanciaKm * costoBaseKmCamion;
+
+        // 2) Costo de estadía en depósito de origen (si no es ni origen ni destino de ruta)
+        // Un tramo sale de un depósito intermedio si:
+        //   - No es el primer tramo (orden > 1)
+        //   - La descripción del origen contiene "depósito"
+        //   - Hay tiempo real de espera registrado
+        if (tramo.getOrden() != null && tramo.getOrden() > 1
+                && esDeposito(tramo.getOrigenDescripcion())
+                && tramo.getHorasEsperaDepositoReal() != null
+                && tramo.getHorasEsperaDepositoReal() > 0) {
+
+            // TODO: Consultar DepositoRepository por nombre/descripción para obtener costoEstadiaDiaria real
+            // Por ahora usamos un valor dummy
+            double costoEstadiaDiaria = 500.0; // dummy: $500/día
+            double diasEstadia = tramo.getHorasEsperaDepositoReal() / 24.0;
+            costoEstadia = diasEstadia * costoEstadiaDiaria;
+        }
+
+        return costoTraslado + costoEstadia;
     }
 
 
@@ -364,7 +409,22 @@ public class TramoServiceImpl implements TramoService {
         // Por ahora usamos la misma distancia que la estimada; cuando tengamos datos reales reemplazamos esto.
         tramo.setDistanciaKmReal(tramo.getDistanciaKmEstimada());
 
-        // En esta iteración no persistimos costo real a nivel tramo; lo calcularemos cuando el modelo lo soporte.
+        // Calcular costo real del tramo
+        if (tramo.getDistanciaKmReal() != null) {
+            double distancia = tramo.getDistanciaKmReal();
+            double costoBaseKmCamion = 150.0; // dummy: $150/km
+            double costoTraslado = distancia * costoBaseKmCamion;
+            
+            // Considerar costo de estadía en depósito si aplica
+            double costoEstadia = 0.0;
+            if (tramo.getHorasEsperaDepositoReal() != null && tramo.getHorasEsperaDepositoReal() > 0) {
+                double costoEstadiaDiaria = 500.0; // dummy: $500/día
+                double diasEstadia = tramo.getHorasEsperaDepositoReal() / 24.0;
+                costoEstadia = diasEstadia * costoEstadiaDiaria;
+            }
+            
+            tramo.setCostoReal(costoTraslado + costoEstadia);
+        }
     }
 
     private Tramo buscarTramoAnterior(Ruta ruta, Tramo tramoActual) {
@@ -396,22 +456,29 @@ public class TramoServiceImpl implements TramoService {
         TramoDTO dto = new TramoDTO();
         dto.setId(tramo.getId());
         dto.setOrden(tramo.getOrden());
+        
+        // Agregar tipo
+        if (tramo.getTipo() != null) {
+            dto.setTipo(tramo.getTipo().name());
+        }
 
         dto.setOrigenDescripcion(tramo.getOrigenDescripcion());
-        dto.setOrigenLatitud(tramo.getOrigenLatitud());
-        dto.setOrigenLongitud(tramo.getOrigenLongitud());
+        dto.setOrigenLatitud(truncarDecimales(tramo.getOrigenLatitud(), 3));
+        dto.setOrigenLongitud(truncarDecimales(tramo.getOrigenLongitud(), 3));
 
         dto.setDestinoDescripcion(tramo.getDestinoDescripcion());
-        dto.setDestinoLatitud(tramo.getDestinoLatitud());
-        dto.setDestinoLongitud(tramo.getDestinoLongitud());
+        dto.setDestinoLatitud(truncarDecimales(tramo.getDestinoLatitud(), 3));
+        dto.setDestinoLongitud(truncarDecimales(tramo.getDestinoLongitud(), 3));
 
-        dto.setDistanciaKmEstimada(tramo.getDistanciaKmEstimada());
-        dto.setTiempoHorasEstimada(tramo.getTiempoHorasEstimada());
-        dto.setHorasEsperaDepositoEstimada(tramo.getHorasEsperaDepositoEstimada());
+        dto.setDistanciaKmEstimada(formatearDistancia(tramo.getDistanciaKmEstimada()));
+        dto.setTiempoHorasEstimada(formatearTiempo(tramo.getTiempoHorasEstimada()));
+        dto.setHorasEsperaDepositoEstimada(formatearTiempo(tramo.getHorasEsperaDepositoEstimada()));
+        dto.setCostoAproximado(formatearCosto(tramo.getCostoAproximado()));
 
-        dto.setDistanciaKmReal(tramo.getDistanciaKmReal());
-        dto.setTiempoHorasReal(tramo.getTiempoHorasReal());
-        dto.setHorasEsperaDepositoReal(tramo.getHorasEsperaDepositoReal());
+        dto.setDistanciaKmReal(formatearDistancia(tramo.getDistanciaKmReal()));
+        dto.setTiempoHorasReal(formatearTiempo(tramo.getTiempoHorasReal()));
+        dto.setHorasEsperaDepositoReal(formatearTiempo(tramo.getHorasEsperaDepositoReal()));
+        dto.setCostoReal(formatearCosto(tramo.getCostoReal()));
 
         dto.setCamionId(tramo.getCamionId());
         dto.setFechaInicioReal(tramo.getFechaInicioReal());
@@ -422,5 +489,47 @@ public class TramoServiceImpl implements TramoService {
         }
 
         return dto;
+    }
+
+    /**
+     * Formatea distancia a 3 decimales con unidad "km"
+     */
+    private String formatearDistancia(Double valor) {
+        if (valor == null) {
+            return null;
+        }
+        return String.format("%.3f km", valor);
+    }
+
+    /**
+     * Formatea tiempo a 3 decimales con unidad "h"
+     */
+    private String formatearTiempo(Double valor) {
+        if (valor == null) {
+            return null;
+        }
+        return String.format("%.3f h", valor);
+    }
+
+    /**
+     * Formatea costo con símbolo $ al inicio
+     */
+    private String formatearCosto(Double valor) {
+        if (valor == null) {
+            return null;
+        }
+        return String.format("$%.2f", valor);
+    }
+
+    /**
+     * Trunca un valor Double a un número específico de decimales.
+     * La truncación es hacia abajo (floor), no redondeo.
+     */
+    private Double truncarDecimales(Double valor, int decimales) {
+        if (valor == null) {
+            return null;
+        }
+        double escala = Math.pow(10, decimales);
+        return Math.floor(valor * escala) / escala;
     }
 }

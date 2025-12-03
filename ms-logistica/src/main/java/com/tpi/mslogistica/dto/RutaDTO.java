@@ -1,5 +1,6 @@
 package com.tpi.mslogistica.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -22,15 +23,17 @@ public class RutaDTO {
     private Double destinoLatitud;
     private Double destinoLongitud;
 
-    // Estimaciones
-    private Double distanciaTotalKmEstimada;
-    private Double tiempoTotalHorasEstimada;
-    private Double costoTotalEstimado;
+    // Estimaciones (formateadas a 3 decimales)
+    @JsonIgnore
+    private String distanciaTotalKmEstimada;  // ej: "245.123 km" (no mostrar en API)
+    private String tiempoTotalHorasEstimada;  // ej: "3.456 h"
+    private String costoTotalEstimado;        // ej: "$12345.67"
 
-    // Valores reales
-    private Double distanciaTotalKmReal;
-    private Double tiempoTotalHorasReal;
-    private Double costoTotalReal;
+    // Valores reales (formateados)
+    @JsonIgnore
+    private String distanciaTotalKmReal;      // ej: "240.789 km" (no mostrar en API)
+    private String tiempoTotalHorasReal;      // ej: "3.234 h"
+    private String costoTotalReal;            // ej: "$12456.89"
 
     // EstadoRuta como String (PLANIFICADA, EN_CURSO, COMPLETADA, CANCELADA)
     private String estado;
