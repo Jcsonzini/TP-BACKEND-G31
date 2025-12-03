@@ -6,6 +6,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import java.util.List;  
+import java.util.Optional;
 
 public interface SolicitudRepository extends JpaRepository<Solicitud, Long> {
 
@@ -22,5 +23,7 @@ public interface SolicitudRepository extends JpaRepository<Solicitud, Long> {
     @Query("SELECT s FROM Solicitud s WHERE s.estado <> com.tpi.mssolicitudes.domain.EstadoSolicitud.ENTREGADA " +
        "AND s.estado <> com.tpi.mssolicitudes.domain.EstadoSolicitud.CANCELADA")
     List<Solicitud> findPendientesDeEntrega();
+
+    Optional<Solicitud> findTopByContenedorCodigoOrderByIdDesc(String contenedorCodigo);
 
 }

@@ -313,19 +313,75 @@ public class SolicitudServiceImpl implements SolicitudService {
     }
 
     @Override
-    public List<EstadoContenedorDTO> obtenerContenedoresPendientes(String destinoFiltro,
-                                                                EstadoSolicitud estadoFiltro) {
+    public List<EstadoContenedorDTO> obtenerContenedoresPendientes(String destinoFiltro) {
+        // delega en la versión completa, pasando null para los filtros nuevos
+        return obtenerContenedoresPendientes(null, destinoFiltro, null, null);
+    }
 
+    @Override
+    public List<EstadoContenedorDTO> obtenerContenedoresPendientes(
+                EstadoContenedor estadoContFiltro,
+                String destinoFiltro,
+                Long clienteIdFiltro,
+                String ubicacionFiltro
+        ) {
+
+        // 1) Tomamos solo las solicitudes que NO están ENTREGADAS ni CANCELADAS
         List<Solicitud> solicitudes = solicitudRepository.findPendientesDeEntrega();
 
-        // Filtros simples en memoria: por destino y estadoSolicitud si vienen
-        return solicitudes.stream()
-                .filter(s -> destinoFiltro == null ||
-                    (s.getDestinoDireccion() != null && s.getDestinoDireccion().toLowerCase().contains(destinoFiltro.toLowerCase())))
-                .filter(s -> estadoFiltro == null || s.getEstado() == estadoFiltro)
+        // 2) Armamos los DTO (estado contenedor, ubicación, tramo actual, etc.)
+        List<EstadoContenedorDTO> dtos = solicitudes.stream()
                 .map(this::armarEstadoContenedorDTO)
                 .toList();
+
+        // 3) Aplicamos los filtros
+        return dtos.stream()
+
+                // FILTRO POR ESTADO LOGICO DEL CONTENEDOR (DISPONIBLE / EN_DEPOSITO / EN_TRANSITO)
+                .filter(dto ->
+                        estadoContFiltro == null ||(
+                            estadoContFiltro != EstadoContenedor.ENTREGADO &&
+                            dto.getEstadoContenedor() == estadoContFiltro
+                        )
+                )
+
+                // FILTRO POR DESTINO (string parcial, case-insensitive)
+                .filter(dto ->
+                        destinoFiltro == null ||
+                        (dto.getDestino() != null &&
+                        dto.getDestino().toLowerCase().contains(destinoFiltro.toLowerCase()))
+                )
+
+                // FILTRO POR CLIENTE ID  (ESTE ES EL IMPORTANTE)
+                .filter(dto ->
+                        clienteIdFiltro == null ||
+                        Objects.equals(dto.getClienteId(), clienteIdFiltro)
+                )
+
+                .filter(dto ->
+                        ubicacionFiltro == null ||
+                        (dto.getUbicacionActual() != null &&
+                        dto.getUbicacionActual().toLowerCase().contains(ubicacionFiltro.toLowerCase()))
+                )
+
+                .toList();
     }
+
+    @Override
+    public EstadoContenedorDTO consultarEstadoTransporteContenedor(String contenedorCodigo) {
+
+        String codigo = Objects.requireNonNull(contenedorCodigo, "El código de contenedor no puede ser nulo");
+
+        Solicitud solicitud = solicitudRepository
+                .findTopByContenedorCodigoOrderByIdDesc(codigo)
+                .orElseThrow(() -> new NoSuchElementException(
+                        "No se encontró ninguna solicitud para el contenedor: " + codigo));
+
+        // Reutilizamos toda la lógica de armado del estado que ya usás en el punto 5
+        return armarEstadoContenedorDTO(solicitud);
+    }
+
+
 
 
 
@@ -460,9 +516,13 @@ public class SolicitudServiceImpl implements SolicitudService {
         dto.setEstadoSolicitud(solicitud.getEstado());
         dto.setOrigen(solicitud.getOrigenDireccion());    // ajustado por tus getters reales
         dto.setDestino(solicitud.getDestinoDireccion());
-        dto.setClienteNombre(solicitud.getCliente() != null ? solicitud.getCliente().getNombre() : null);
         dto.setFechaCreacion(solicitud.getFechaCreacion());
         dto.setFechaUltimaActualizacion(solicitud.getFechaUltimaActualizacion());
+        if (solicitud.getCliente() != null) {
+            dto.setClienteId(solicitud.getCliente().getId());
+            dto.setClienteNombre(solicitud.getCliente().getNombre());
+        }
+
 
         Long rutaId = solicitud.getRutaAsignadaId();
         dto.setRutaId(rutaId);

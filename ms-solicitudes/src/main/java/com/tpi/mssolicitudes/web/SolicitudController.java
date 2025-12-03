@@ -4,6 +4,7 @@ import com.tpi.mssolicitudes.client.dto.FinalizarOperacionRequest;
 import com.tpi.mssolicitudes.client.dto.RutaDTO;
 import com.tpi.mssolicitudes.domain.EstadoSolicitud;
 import com.tpi.mssolicitudes.dto.CambioEstadoSolicitudRequest;
+import com.tpi.mssolicitudes.dto.EstadoContenedor;
 import com.tpi.mssolicitudes.dto.EstadoContenedorDTO;
 import com.tpi.mssolicitudes.dto.SolicitudCreateRequest;
 import com.tpi.mssolicitudes.dto.SolicitudDTO;
@@ -13,6 +14,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Schema;
+
 
 import java.util.List;
 
@@ -110,13 +114,33 @@ public class SolicitudController {
         return ResponseEntity.ok(actualizada);
     }
 
-    @GetMapping("/api/seguimiento/pendientes")
-    public ResponseEntity<List<EstadoContenedorDTO>> obtenerContenedoresPendientes(
+    @GetMapping("/seguimiento/pendientes")
+    public ResponseEntity<List<EstadoContenedorDTO>> obtenerPendientes(
+            @Parameter(
+                    description = "Estado lógico del contenedor (DISPONIBLE, EN_DEPOSITO, EN_TRANSITO)",
+                    schema = @Schema(allowableValues = {"DISPONIBLE", "EN_DEPOSITO", "EN_TRANSITO"})
+            )
+            @RequestParam(required = false) EstadoContenedor estadoContenedor,
             @RequestParam(required = false) String destino,
-            @RequestParam(required = false) EstadoSolicitud estado
+            @RequestParam(required = false) Long clienteId,
+            @RequestParam(required = false) String ubicacion 
     ) {
-        return ResponseEntity.ok(solicitudService.obtenerContenedoresPendientes(destino, estado));
+        return ResponseEntity.ok(
+                solicitudService.obtenerContenedoresPendientes(
+                        estadoContenedor,
+                        destino,
+                        clienteId,
+                        ubicacion
+                )
+        );
     }
+
+    @GetMapping("/seguimiento/contenedores/{codigo}")
+    public ResponseEntity<EstadoContenedorDTO> consultarEstadoContenedor(@PathVariable String codigo) {
+        return ResponseEntity.ok(solicitudService.consultarEstadoTransporteContenedor(codigo));
+    }
+
+
 
 
 

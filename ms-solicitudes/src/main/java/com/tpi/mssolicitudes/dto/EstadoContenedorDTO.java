@@ -26,6 +26,7 @@ public class EstadoContenedorDTO {
     private TramoResumenDTO tramoActual;          // si hay tramo en curso
     private List<TramoResumenDTO> tramos;        // resumen de todos los tramos
 
+    private Long clienteId; 
     private String clienteNombre;
     private LocalDateTime fechaCreacion;
     private LocalDateTime fechaUltimaActualizacion;

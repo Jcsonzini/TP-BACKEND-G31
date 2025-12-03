@@ -4,6 +4,7 @@ import com.tpi.mssolicitudes.client.dto.RutaDTO;
 import com.tpi.mssolicitudes.domain.EstadoSolicitud;
 import com.tpi.mssolicitudes.dto.CambioEstadoSolicitudRequest;
 import com.tpi.mssolicitudes.dto.EstadoContenedorDTO;
+import com.tpi.mssolicitudes.dto.EstadoContenedor;
 import com.tpi.mssolicitudes.dto.SolicitudCreateRequest;
 import com.tpi.mssolicitudes.dto.SolicitudDTO;
 import com.tpi.mssolicitudes.client.dto.FinalizarOperacionRequest;
@@ -37,13 +38,28 @@ public interface SolicitudService {
      * Asigna una ruta definitiva para la solicitud y la marca como planificada.
      */
     SolicitudDTO asignarRuta(Long solicitudId, Long rutaId);
+
     SolicitudDTO finalizarOperacion(Long solicitudId, FinalizarOperacionRequest request);
 
     SolicitudDTO marcarEnTransito(Long solicitudId);
 
     SolicitudDTO marcarEnDeposito(Long solicitudId);
 
-    List<EstadoContenedorDTO> obtenerContenedoresPendientes(String destinoFiltro, EstadoSolicitud estadoFiltro);
+    /**
+     * Versión "simple" (ya existente): permite filtrar por destino y estado de la solicitud.
+     */
+    List<EstadoContenedorDTO> obtenerContenedoresPendientes(String destinoFiltro);
 
+    /**
+     * Versión "completa": permite filtrar además por estado lógico del contenedor y por cliente.
+     */
+    List<EstadoContenedorDTO> obtenerContenedoresPendientes(
+            EstadoContenedor estadoContFiltro,
+            String destinoFiltro,
+            Long clienteIdFiltro,
+            String ubicacionFiltro
+    );
+
+    EstadoContenedorDTO consultarEstadoTransporteContenedor(String contenedorCodigo);
 
 }
