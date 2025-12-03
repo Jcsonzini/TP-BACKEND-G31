@@ -4,6 +4,8 @@ import com.tpi.mssolicitudes.domain.Solicitud;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import java.util.List;  
 
 public interface SolicitudRepository extends JpaRepository<Solicitud, Long> {
 
@@ -16,4 +18,9 @@ public interface SolicitudRepository extends JpaRepository<Solicitud, Long> {
      * Listar solicitudes asociadas a un contenedor específico, paginadas.
      */
     Page<Solicitud> findByContenedorCodigo(String contenedorCodigo, Pageable pageable);
+
+    @Query("SELECT s FROM Solicitud s WHERE s.estado <> com.tpi.mssolicitudes.domain.EstadoSolicitud.ENTREGADA " +
+       "AND s.estado <> com.tpi.mssolicitudes.domain.EstadoSolicitud.CANCELADA")
+    List<Solicitud> findPendientesDeEntrega();
+
 }

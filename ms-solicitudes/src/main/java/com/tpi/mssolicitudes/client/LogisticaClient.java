@@ -40,6 +40,17 @@ public class LogisticaClient {
         return responseArray != null ? Arrays.asList(responseArray) : List.of();
     }
 
+    public RutaDTO obtenerRuta(Long rutaId) {
+        return webClientBuilder.baseUrl(logisticaBaseUrl)
+                .build()
+                .get()
+                .uri("/api/rutas/{id}", rutaId)
+                .retrieve()
+                .bodyToMono(RutaDTO.class)
+                .block();
+    }
+
+
     public RutaDTO seleccionarRuta(Long rutaId) {
 
         WebClient client = webClientBuilder.baseUrl(logisticaBaseUrl).build();

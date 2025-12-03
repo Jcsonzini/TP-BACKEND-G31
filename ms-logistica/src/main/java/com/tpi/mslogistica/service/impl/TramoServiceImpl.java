@@ -49,18 +49,29 @@ public class TramoServiceImpl implements TramoService {
 
     @Override
     public TramoDTO asignarCamion(Long tramoId, AsignarCamionTramoRequest request) {
-        Long nonNullTramoId = Objects.requireNonNull(tramoId, "El id del tramo no puede ser nulo");
-        AsignarCamionTramoRequest nonNullRequest = Objects.requireNonNull(request, "El request de asignación no puede ser nulo");
 
-        Tramo tramo = tramoRepository.findById(nonNullTramoId)
-            .orElseThrow(() -> new NoSuchElementException("Tramo no encontrado: " + nonNullTramoId));
-        Tramo nonNullTramo = Objects.requireNonNull(tramo, "El tramo recuperado no puede ser nulo");
+        Tramo tramo = tramoRepository.findById(tramoId)
+                .orElseThrow(() -> new NoSuchElementException("Tramo no encontrado: " + tramoId));
 
-        nonNullTramo.setCamionId(nonNullRequest.getCamionId());
-        // Más adelante: validar contra ms-catalogo que el camión exista y tenga capacidad
+        // RN1: el tramo debe estar PENDIENTE
+        if (tramo.getEstado() != EstadoTramo.PENDIENTE) {
+            throw new IllegalStateException("Solo se puede asignar camión a tramos en estado PENDIENTE");
+        }
 
-        Tramo guardado = tramoRepository.save(nonNullTramo);
-        return toDTO(guardado);
+        Long camionId = request.getCamionId();
+        if (camionId == null) {
+            throw new IllegalArgumentException("Debe indicar camionId");
+        }
+
+        // Si más adelante querés validar contra ms-catalogo (existencia, capacidad, disponible),
+        // acá es donde llamarías a un CatalogoClient.
+
+        tramo.setCamionId(camionId);
+        tramo.setEstado(EstadoTramo.ASIGNADO_A_CAMION);
+
+        tramoRepository.save(tramo);
+
+        return toDTO(tramo);
     }
 
     @Override
@@ -98,12 +109,13 @@ public class TramoServiceImpl implements TramoService {
 
     @Override
     public TramoDTO iniciarTramo(Long tramoId) {
-        Tramo tramo = tramoRepository.findById(tramoId)
-                .orElseThrow(() -> new IllegalArgumentException("Tramo no encontrado: " + tramoId));
 
-        // RN: solo se puede iniciar si está PENDIENTE
-        if (tramo.getEstado() != EstadoTramo.PENDIENTE) {
-            throw new IllegalStateException("Solo se pueden iniciar tramos en estado PENDIENTE");
+        Tramo tramo = tramoRepository.findById(tramoId)
+                .orElseThrow(() -> new NoSuchElementException("Tramo no encontrado: " + tramoId));
+
+        // RN1: solo se puede iniciar si está ASIGNADO_A_CAMION
+        if (tramo.getEstado() != EstadoTramo.ASIGNADO_A_CAMION) {
+            throw new IllegalStateException("Solo se pueden iniciar tramos en estado ASIGNADO_A_CAMION");
         }
 
         Ruta ruta = tramo.getRuta();
@@ -111,38 +123,52 @@ public class TramoServiceImpl implements TramoService {
             throw new IllegalStateException("El tramo no tiene ruta asociada");
         }
 
-        // Refrescamos la ruta desde la BD para asegurarnos de tener todos los tramos
         Long rutaId = ruta.getId();
         ruta = rutaRepository.findById(rutaId)
                 .orElseThrow(() -> new NoSuchElementException("Ruta no encontrada: " + rutaId));
 
-        // RN: no puede haber otro tramo EN_CURSO en la misma ruta
-        boolean hayOtroEnCurso = ruta.getTramos() != null && ruta.getTramos().stream()
-                .anyMatch(t -> !t.getId().equals(tramo.getId())
-                        && t.getEstado() == EstadoTramo.EN_CURSO);
-
-        if (hayOtroEnCurso) {
-            throw new IllegalStateException("No se puede iniciar un tramo mientras otro tramo de la ruta está EN_CURSO");
+        // RN2: no puede haber otro tramo EN_CURSO en la misma ruta
+        boolean existeEnCurso = ruta.getTramos().stream()
+                .anyMatch(t -> t.getEstado() == EstadoTramo.EN_CURSO);
+        if (existeEnCurso) {
+            throw new IllegalStateException("No se puede iniciar el tramo porque ya hay otro EN_CURSO en la ruta");
         }
 
-        // RN: si no es el primer tramo, el anterior debe estar FINALIZADO
+        // RN3: secuencia correcta (si no es el primero, el anterior debe estar FINALIZADO)
         if (tramo.getOrden() != null && tramo.getOrden() > 1) {
-            Tramo anterior = buscarTramoAnterior(ruta, tramo);
-            if (anterior == null) {
-                throw new IllegalStateException("No se encontró el tramo anterior en la ruta");
-            }
-            if (anterior.getEstado() != EstadoTramo.FINALIZADO) {
-                throw new IllegalStateException(
-                        "Solo se puede iniciar el tramo " + tramo.getOrden()
-                                + " cuando el tramo anterior está FINALIZADO");
+            int ordenAnterior = tramo.getOrden() - 1;
+
+            Tramo tramoAnterior = ruta.getTramos().stream()
+                    .filter(t -> Objects.equals(t.getOrden(), ordenAnterior))
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalStateException("No se encontró el tramo anterior en la ruta"));
+
+            if (tramoAnterior.getEstado() != EstadoTramo.FINALIZADO) {
+                throw new IllegalStateException("No se puede iniciar este tramo porque el anterior no está FINALIZADO");
             }
         }
 
-        // Lógica de inicio "real": set EN_CURSO, fechaInicioReal, posible estadía
-        iniciarTramoInterno(tramo, ruta);
+        // RN4: debe tener camión asignado
+        if (tramo.getCamionId() == null) {
+            throw new IllegalStateException("No se puede iniciar un tramo sin camión asignado");
+        }
+
+        // Si es el primer tramo que se inicia, podemos marcar la ruta como EN_CURSO
+        if (ruta.getEstado() != EstadoRuta.EN_CURSO && ruta.getEstado() != EstadoRuta.COMPLETADA) {
+            ruta.setEstado(EstadoRuta.EN_CURSO);
+        }
+
+        // Lógica real de inicio (fechaInicioReal, estado EN_CURSO, etc.)
+        iniciarTramoInterno(tramo, ruta);  // helper requiere tramo y ruta
 
         tramoRepository.save(tramo);
-        rutaRepository.save(ruta); // por si en el futuro ajustás algo a nivel ruta
+        rutaRepository.save(ruta);
+
+        // Avisar a ms-solicitudes que la operación está en tránsito
+        Long solicitudId = ruta.getSolicitudId();
+        if (solicitudId != null) {
+            solicitudesClient.marcarEnTransito(solicitudId);
+        }
 
         return toDTO(tramo);
     }
@@ -152,11 +178,10 @@ public class TramoServiceImpl implements TramoService {
 
     @Override
     public TramoDTO finalizarTramo(Long tramoId) {
-
         Tramo tramo = tramoRepository.findById(tramoId)
                 .orElseThrow(() -> new IllegalArgumentException("Tramo no encontrado: " + tramoId));
 
-        // RN: solo se puede finalizar si está EN_CURSO
+        // RN1: solo se puede finalizar si está EN_CURSO
         if (tramo.getEstado() != EstadoTramo.EN_CURSO) {
             throw new IllegalStateException("Solo se pueden finalizar tramos en estado EN_CURSO");
         }
@@ -170,23 +195,44 @@ public class TramoServiceImpl implements TramoService {
         ruta = rutaRepository.findById(rutaId)
                 .orElseThrow(() -> new NoSuchElementException("Ruta no encontrada: " + rutaId));
 
-        // 1) Finalizar tramo (cambia estado, fechaFinReal, tiempoHorasReal, etc.)
+        // RN2: debe tener fechaInicioReal (no deberíamos permitir finalizar algo que nunca se inició bien)
+        if (tramo.getFechaInicioReal() == null) {
+            throw new IllegalStateException("No se puede finalizar un tramo sin fecha de inicio real");
+        }
+
+        // 1) Finalizar tramo (estado FINALIZADO, fechaFinReal, tiempoHorasReal, distanciaKmReal si corresponde)
         finalizarTramoInterno(tramo);
 
-        // 2) Recalcular totales reales de la ruta (devuelve true si la ruta quedó COMPLETADA)
+        // RN3: coherencia de fechas (por si en el futuro se cargan manual)
+        if (tramo.getFechaFinReal() != null &&
+            tramo.getFechaFinReal().isBefore(tramo.getFechaInicioReal())) {
+            throw new IllegalStateException("La fecha de fin real no puede ser anterior a la fecha de inicio real");
+        }
+
+        // 2) Recalcular totales de la ruta (devuelve true si todos los tramos quedaron FINALIZADOS)
         boolean rutaCompletada = recalcularTotalesRuta(ruta);
 
-        // 3) Guardar tramo y ruta
+        // 3) Si la ruta no está COMPLETADA pero estaba PLANIFICADA, podemos asegurar que quede EN_CURSO
+        if (!rutaCompletada && ruta.getEstado() != EstadoRuta.EN_CURSO) {
+            ruta.setEstado(EstadoRuta.EN_CURSO);
+        }
+
         tramoRepository.save(tramo);
         rutaRepository.save(ruta);
 
-        // 4) Si todos los tramos están finalizados → notificar a ms-solicitudes
+        Long solicitudId = ruta.getSolicitudId();
+
+        // 4) Si la ruta quedó COMPLETADA, avisar a ms-solicitudes
         if (rutaCompletada) {
             notificarSolicitudCompletada(ruta);
+        } else if (solicitudId != null) {
+            // Tramo intermedio finalizado → contenedor queda en depósito
+            solicitudesClient.marcarEnDeposito(solicitudId);
         }
 
         return toDTO(tramo);
     }
+
 
 
 

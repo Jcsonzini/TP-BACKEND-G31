@@ -6,8 +6,11 @@ import com.tpi.mssolicitudes.domain.Solicitud;
 import com.tpi.mssolicitudes.dto.CambioEstadoSolicitudRequest;
 import com.tpi.mssolicitudes.dto.ClienteCreateRequest;
 import com.tpi.mssolicitudes.dto.ContenedorCreateRequest;
+import com.tpi.mssolicitudes.dto.EstadoContenedor;
+import com.tpi.mssolicitudes.dto.EstadoContenedorDTO;
 import com.tpi.mssolicitudes.dto.SolicitudCreateRequest;
 import com.tpi.mssolicitudes.dto.SolicitudDTO;
+import com.tpi.mssolicitudes.dto.TramoResumenDTO;
 import com.tpi.mssolicitudes.repository.ClienteRepository;
 import com.tpi.mssolicitudes.repository.SolicitudRepository;
 import com.tpi.mssolicitudes.service.SolicitudService;
@@ -19,9 +22,11 @@ import com.tpi.mssolicitudes.client.CatalogoClient;
 import com.tpi.mssolicitudes.client.dto.FinalizarOperacionRequest;
 import com.tpi.mssolicitudes.client.dto.RutaCreateRequest;
 import com.tpi.mssolicitudes.client.dto.RutaDTO;
+import com.tpi.mssolicitudes.client.dto.TramoDTO;
 import com.tpi.mssolicitudes.client.LogisticaClient;
 
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Objects;
@@ -236,6 +241,44 @@ public class SolicitudServiceImpl implements SolicitudService {
     }
 
     @Override
+    public SolicitudDTO marcarEnTransito(Long solicitudId) {
+
+        Solicitud solicitud = solicitudRepository.findById(solicitudId)
+                .orElseThrow(() -> new NoSuchElementException("Solicitud no encontrada: " + solicitudId));
+
+        // No tiene sentido pasar a EN_TRANSITO si ya fue ENTREGADA o CANCELADA
+        if (solicitud.getEstado() == EstadoSolicitud.ENTREGADA ||
+            solicitud.getEstado() == EstadoSolicitud.CANCELADA) {
+            throw new IllegalStateException(
+                    "No se puede pasar a EN_TRANSITO una solicitud en estado: " + solicitud.getEstado());
+        }
+
+        solicitud.setEstado(EstadoSolicitud.EN_TRANSITO);
+        solicitudRepository.save(solicitud);
+
+        return toDTO(solicitud);
+    }
+
+    @Override
+    public SolicitudDTO marcarEnDeposito(Long solicitudId) {
+
+        Solicitud solicitud = solicitudRepository.findById(solicitudId)
+                .orElseThrow(() -> new NoSuchElementException("Solicitud no encontrada: " + solicitudId));
+
+        // Normalmente venís de EN_TRANSITO, pero si querés podés permitir PLANIFICADA también
+        if (solicitud.getEstado() != EstadoSolicitud.EN_TRANSITO &&
+            solicitud.getEstado() != EstadoSolicitud.PLANIFICADA) {
+            throw new IllegalStateException(
+                    "No se puede pasar a EN_DEPOSITO una solicitud en estado: " + solicitud.getEstado());
+        }
+
+        solicitud.setEstado(EstadoSolicitud.EN_DEPOSITO);
+        solicitudRepository.save(solicitud);
+
+        return toDTO(solicitud);
+    }
+
+   @Override
     public SolicitudDTO finalizarOperacion(Long solicitudId, FinalizarOperacionRequest request) {
 
         Long nonNullSolicitudId = Objects.requireNonNull(solicitudId, "El id de la solicitud no puede ser nulo");
@@ -244,9 +287,10 @@ public class SolicitudServiceImpl implements SolicitudService {
         Solicitud solicitud = solicitudRepository.findById(nonNullSolicitudId)
                 .orElseThrow(() -> new NoSuchElementException("Solicitud no encontrada: " + nonNullSolicitudId));
 
-        // Solo se puede finalizar si está PLANIFICADA o EN_TRANSITO
+        // Solo se puede finalizar si está PLANIFICADA, EN_TRANSITO o EN_DEPOSITO
         if (solicitud.getEstado() != EstadoSolicitud.PLANIFICADA &&
-            solicitud.getEstado() != EstadoSolicitud.EN_TRANSITO) {
+            solicitud.getEstado() != EstadoSolicitud.EN_TRANSITO &&
+            solicitud.getEstado() != EstadoSolicitud.EN_DEPOSITO) {
 
             throw new IllegalStateException(
                     "No se puede finalizar una solicitud en estado: " + solicitud.getEstado());
@@ -267,6 +311,23 @@ public class SolicitudServiceImpl implements SolicitudService {
 
         return toDTO(solicitud);
     }
+
+    @Override
+    public List<EstadoContenedorDTO> obtenerContenedoresPendientes(String destinoFiltro,
+                                                                EstadoSolicitud estadoFiltro) {
+
+        List<Solicitud> solicitudes = solicitudRepository.findPendientesDeEntrega();
+
+        // Filtros simples en memoria: por destino y estadoSolicitud si vienen
+        return solicitudes.stream()
+                .filter(s -> destinoFiltro == null ||
+                    (s.getDestinoDireccion() != null && s.getDestinoDireccion().toLowerCase().contains(destinoFiltro.toLowerCase())))
+                .filter(s -> estadoFiltro == null || s.getEstado() == estadoFiltro)
+                .map(this::armarEstadoContenedorDTO)
+                .toList();
+    }
+
+
 
 
  
@@ -390,4 +451,108 @@ public class SolicitudServiceImpl implements SolicitudService {
         double velocidadPromedioKmH = 60.0; // heurística básica para estimación inicial
         return distanciaKm / velocidadPromedioKmH;
     }
+
+    private EstadoContenedorDTO armarEstadoContenedorDTO(Solicitud solicitud) {
+
+        EstadoContenedorDTO dto = new EstadoContenedorDTO();
+        dto.setSolicitudId(solicitud.getId());
+        dto.setContenedorCodigo(solicitud.getContenedorCodigo());
+        dto.setEstadoSolicitud(solicitud.getEstado());
+        dto.setOrigen(solicitud.getOrigenDireccion());    // ajustado por tus getters reales
+        dto.setDestino(solicitud.getDestinoDireccion());
+        dto.setClienteNombre(solicitud.getCliente() != null ? solicitud.getCliente().getNombre() : null);
+        dto.setFechaCreacion(solicitud.getFechaCreacion());
+        dto.setFechaUltimaActualizacion(solicitud.getFechaUltimaActualizacion());
+
+        Long rutaId = solicitud.getRutaAsignadaId();
+        dto.setRutaId(rutaId);
+
+        // 1) Si la solicitud está ENTREGADA → CONTENEDOR ENTREGADO (caso terminal)
+        if (solicitud.getEstado() == EstadoSolicitud.ENTREGADA) {
+            dto.setEstadoContenedor(EstadoContenedor.ENTREGADO);
+            dto.setEstadoRuta("COMPLETADA");
+            dto.setUbicacionActual("Entregado al cliente");
+            dto.setTramoActual(null);
+            dto.setTramos(List.of());
+            return dto;
+        }
+
+        // 2) Si no hay ruta → contenedor disponible / sin mover
+        if (rutaId == null) {
+            dto.setEstadoContenedor(EstadoContenedor.DISPONIBLE);
+            dto.setEstadoRuta(null);
+            dto.setUbicacionActual("Pendiente de asignar ruta");
+            dto.setTramoActual(null);
+            dto.setTramos(List.of());
+            return dto;
+        }
+
+        // Traemos la ruta desde ms-logistica
+        RutaDTO rutaDTO = logisticaClient.obtenerRuta(rutaId);
+        dto.setEstadoRuta(rutaDTO.getEstado());
+
+        // Mapeo de tramos
+        List<TramoResumenDTO> tramoResumidos = rutaDTO.getTramos().stream()
+                .map(this::toTramoResumen)
+                .toList();
+        dto.setTramos(tramoResumidos);
+
+        // 3) Si la ruta está COMPLETADA → CONTENEDOR ENTREGADO
+        if ("COMPLETADA".equalsIgnoreCase(rutaDTO.getEstado())) {
+            dto.setEstadoContenedor(EstadoContenedor.ENTREGADO);
+            dto.setUbicacionActual("Entregado al cliente");
+            dto.setTramoActual(null);
+            return dto;
+        }
+
+        // 4) Si hay tramo EN_CURSO → EN_TRANSITO
+        TramoDTO tramoEnCurso = rutaDTO.getTramos().stream()
+                .filter(t -> "EN_CURSO".equalsIgnoreCase(t.getEstado()))
+                .findFirst()
+                .orElse(null);
+
+        if (tramoEnCurso != null) {
+            dto.setEstadoContenedor(EstadoContenedor.EN_TRANSITO);
+            dto.setTramoActual(toTramoResumen(tramoEnCurso));
+            dto.setUbicacionActual(
+                    "En tránsito entre " +
+                            tramoEnCurso.getOrigenDescripcion() +
+                            " y " +
+                            tramoEnCurso.getDestinoDescripcion()
+            );
+            return dto;
+        }
+
+        // 5) Si no hay EN_CURSO pero sí hay FINALIZADOS → EN_DEPOSITO
+        TramoDTO ultimoFinalizado = rutaDTO.getTramos().stream()
+                .filter(t -> "FINALIZADO".equalsIgnoreCase(t.getEstado()))
+                .max(Comparator.comparing(TramoDTO::getOrden))
+                .orElse(null);
+
+        if (ultimoFinalizado != null) {
+            dto.setEstadoContenedor(EstadoContenedor.EN_DEPOSITO);
+            dto.setUbicacionActual("En depósito intermedio: " + ultimoFinalizado.getDestinoDescripcion());
+            dto.setTramoActual(null);
+            return dto;
+        }
+
+        // 6) Si no empezó ningún tramo → DISPONIBLE (pendiente en origen)
+        dto.setEstadoContenedor(EstadoContenedor.DISPONIBLE);
+        dto.setUbicacionActual("Pendiente en origen: " + rutaDTO.getOrigenDireccion());
+        dto.setTramoActual(null);
+
+        return dto;
+    }
+
+    private TramoResumenDTO toTramoResumen(TramoDTO t) {
+        TramoResumenDTO dto = new TramoResumenDTO();
+        dto.setTramoId(t.getId());
+        dto.setOrden(t.getOrden());
+        dto.setOrigen(t.getOrigenDescripcion());
+        dto.setDestino(t.getDestinoDescripcion());
+        dto.setEstado(t.getEstado()); // ya es String en el DTO
+        return dto;
+    }
+
+
 }

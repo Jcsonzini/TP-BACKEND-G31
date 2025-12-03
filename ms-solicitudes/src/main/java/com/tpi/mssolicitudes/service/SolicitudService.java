@@ -1,7 +1,9 @@
 package com.tpi.mssolicitudes.service;
 
 import com.tpi.mssolicitudes.client.dto.RutaDTO;
+import com.tpi.mssolicitudes.domain.EstadoSolicitud;
 import com.tpi.mssolicitudes.dto.CambioEstadoSolicitudRequest;
+import com.tpi.mssolicitudes.dto.EstadoContenedorDTO;
 import com.tpi.mssolicitudes.dto.SolicitudCreateRequest;
 import com.tpi.mssolicitudes.dto.SolicitudDTO;
 import com.tpi.mssolicitudes.client.dto.FinalizarOperacionRequest;
@@ -36,5 +38,12 @@ public interface SolicitudService {
      */
     SolicitudDTO asignarRuta(Long solicitudId, Long rutaId);
     SolicitudDTO finalizarOperacion(Long solicitudId, FinalizarOperacionRequest request);
+
+    SolicitudDTO marcarEnTransito(Long solicitudId);
+
+    SolicitudDTO marcarEnDeposito(Long solicitudId);
+
+    List<EstadoContenedorDTO> obtenerContenedoresPendientes(String destinoFiltro, EstadoSolicitud estadoFiltro);
+
 
 }

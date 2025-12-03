@@ -2,7 +2,9 @@ package com.tpi.mssolicitudes.web;
 
 import com.tpi.mssolicitudes.client.dto.FinalizarOperacionRequest;
 import com.tpi.mssolicitudes.client.dto.RutaDTO;
+import com.tpi.mssolicitudes.domain.EstadoSolicitud;
 import com.tpi.mssolicitudes.dto.CambioEstadoSolicitudRequest;
+import com.tpi.mssolicitudes.dto.EstadoContenedorDTO;
 import com.tpi.mssolicitudes.dto.SolicitudCreateRequest;
 import com.tpi.mssolicitudes.dto.SolicitudDTO;
 import com.tpi.mssolicitudes.service.SolicitudService;
@@ -55,6 +57,16 @@ public class SolicitudController {
         return ResponseEntity.ok(actualizada);
     }
 
+    @PutMapping("/{id}/en-transito")
+    public ResponseEntity<SolicitudDTO> marcarEnTransito(@PathVariable Long id) {
+        return ResponseEntity.ok(solicitudService.marcarEnTransito(id));
+    }
+
+    @PutMapping("/{id}/en-deposito")
+    public ResponseEntity<SolicitudDTO> marcarEnDeposito(@PathVariable Long id) {
+        return ResponseEntity.ok(solicitudService.marcarEnDeposito(id));
+    }
+
     @GetMapping("/{id}")
     @Operation(summary = "Obtener una solicitud por ID")
     public ResponseEntity<SolicitudDTO> obtenerPorId(@PathVariable Long id) {
@@ -97,6 +109,15 @@ public class SolicitudController {
         SolicitudDTO actualizada = solicitudService.finalizarOperacion(id, request);
         return ResponseEntity.ok(actualizada);
     }
+
+    @GetMapping("/api/seguimiento/pendientes")
+    public ResponseEntity<List<EstadoContenedorDTO>> obtenerContenedoresPendientes(
+            @RequestParam(required = false) String destino,
+            @RequestParam(required = false) EstadoSolicitud estado
+    ) {
+        return ResponseEntity.ok(solicitudService.obtenerContenedoresPendientes(destino, estado));
+    }
+
 
 
 }

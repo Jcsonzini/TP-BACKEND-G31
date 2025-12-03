@@ -28,4 +28,27 @@ public class SolicitudesClient {
                 .toBodilessEntity()
                 .block();   // está bien bloquear acá, esto es service síncrono
     }
+
+    public void marcarEnTransito(Long solicitudId) {
+
+        WebClient client = webClientBuilder.baseUrl(msSolicitudesBaseUrl).build();
+
+        client.put()
+                .uri("/api/solicitudes/{id}/en-transito", solicitudId)
+                .retrieve()
+                .toBodilessEntity()
+                .block();
+    }
+
+    public void marcarEnDeposito(Long solicitudId) {
+
+        WebClient client = webClientBuilder.baseUrl(msSolicitudesBaseUrl).build();
+
+        client.put()
+                .uri("/api/solicitudes/{id}/en-deposito", solicitudId)
+                .retrieve()
+                .toBodilessEntity()
+                .block();
+    }
+
 }

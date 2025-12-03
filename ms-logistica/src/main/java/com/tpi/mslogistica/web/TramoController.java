@@ -28,11 +28,11 @@ public class TramoController {
     }
 
     @PutMapping("/{id}/asignar-camion")
-    @Operation(summary = "Asignar camión a un tramo")
-    public ResponseEntity<TramoDTO> asignarCamion(@PathVariable Long id,
-                                                  @RequestBody AsignarCamionTramoRequest request) {
-        TramoDTO dto = tramoService.asignarCamion(id, request);
-        return ResponseEntity.ok(dto);
+    public ResponseEntity<TramoDTO> asignarCamion(
+            @PathVariable Long id,
+            @RequestBody AsignarCamionTramoRequest request
+    ) {
+        return ResponseEntity.ok(tramoService.asignarCamion(id, request));
     }
 
     @PutMapping("/{id}/estado")
