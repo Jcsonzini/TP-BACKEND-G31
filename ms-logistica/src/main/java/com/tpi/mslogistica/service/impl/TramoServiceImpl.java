@@ -1,7 +1,11 @@
 package com.tpi.mslogistica.service.impl;
 
+import com.tpi.mslogistica.client.CatalogoClient;
 import com.tpi.mslogistica.client.SolicitudesClient;
+import com.tpi.mslogistica.client.dto.CamionRemotoDTO;
+import com.tpi.mslogistica.client.dto.ContenedorRemotoDTO;
 import com.tpi.mslogistica.client.dto.FinalizarOperacionRequest;
+import com.tpi.mslogistica.client.dto.SolicitudRemotaDTO;
 import com.tpi.mslogistica.domain.EstadoRuta;
 import com.tpi.mslogistica.domain.EstadoTramo;
 import com.tpi.mslogistica.domain.Ruta;
@@ -15,6 +19,7 @@ import com.tpi.mslogistica.repository.TramoRepository;
 import com.tpi.mslogistica.service.TramoService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.client.WebClient;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -29,6 +34,8 @@ public class TramoServiceImpl implements TramoService {
     private final TramoRepository tramoRepository;
     private final RutaRepository rutaRepository;
     private final SolicitudesClient solicitudesClient;
+    private final CatalogoClient catalogoClient;
+
 
     @Override
     public TramoDTO obtenerPorId(Long id) {
@@ -51,28 +58,96 @@ public class TramoServiceImpl implements TramoService {
     @Override
     public TramoDTO asignarCamion(Long tramoId, AsignarCamionTramoRequest request) {
 
+        // =============================
+        // 0) Validaciones iniciales
+        // =============================
+
+        if (tramoId == null) {
+            throw new IllegalArgumentException("El ID del tramo no puede ser nulo");
+        }
+
+        if (request == null || request.getCamionId() == null) {
+            throw new IllegalArgumentException("Debe especificar un camionId en la solicitud");
+        }
+
+        Long camionId = request.getCamionId();
+
+        // Buscar tramo
         Tramo tramo = tramoRepository.findById(tramoId)
                 .orElseThrow(() -> new NoSuchElementException("Tramo no encontrado: " + tramoId));
 
-        // RN1: el tramo debe estar PENDIENTE
+        // Solo se puede asignar camión si está PENDIENTE
         if (tramo.getEstado() != EstadoTramo.PENDIENTE) {
             throw new IllegalStateException("Solo se puede asignar camión a tramos en estado PENDIENTE");
         }
 
-        Long camionId = request.getCamionId();
-        if (camionId == null) {
-            throw new IllegalArgumentException("Debe indicar camionId");
+        // =============================
+        // 1) Obtener solicitud asociada
+        // =============================
+        Ruta ruta = tramo.getRuta();
+        if (ruta == null || ruta.getSolicitudId() == null) {
+            throw new IllegalStateException("El tramo no posee una ruta con solicitud asociada");
         }
 
-        // Si más adelante querés validar contra ms-catalogo (existencia, capacidad, disponible),
-        // acá es donde llamarías a un CatalogoClient.
+        Long solicitudId = ruta.getSolicitudId();
+
+        SolicitudRemotaDTO solicitud = solicitudesClient.obtenerSolicitudPorId(solicitudId);
+        if (solicitud == null || solicitud.getContenedorCodigo() == null) {
+            throw new IllegalStateException(
+                    "No se pudo obtener el contenedor asociado a la solicitud " + solicitudId);
+        }
+
+        String contenedorCodigo = solicitud.getContenedorCodigo();
+
+        // =============================
+        // 2) Obtener camión y contenedor desde ms-catalogo
+        // =============================
+
+        CamionRemotoDTO camion = catalogoClient.obtenerCamionPorId(camionId);
+        if (camion == null) {
+            throw new IllegalStateException("No existe el camión con ID " + camionId);
+        }
+
+        ContenedorRemotoDTO contenedor = catalogoClient.obtenerContenedorPorCodigo(contenedorCodigo);
+        if (contenedor == null) {
+            throw new IllegalStateException("No existe el contenedor con código " + contenedorCodigo);
+        }
+
+        // =============================
+        // 3) Validar capacidades (RN del enunciado)
+        // =============================
+
+        Double camCapKg = camion.getCapacidadKg();
+        Double camVolM3 = camion.getVolumenM3();
+        Double contKg   = contenedor.getCapacidadKg();
+        Double contVol  = contenedor.getVolumenReal();
+
+        if (camCapKg == null || camVolM3 == null || contKg == null || contVol == null) {
+            throw new IllegalStateException("No se pueden validar capacidades: hay atributos nulos");
+        }
+
+        // Validación por peso
+        if (contKg > camCapKg) {
+            throw new IllegalStateException(
+                    "El contenedor requiere " + contKg + " kg pero el camión solo soporta " + camCapKg + " kg");
+        }
+
+        // Validación por volumen
+        if (contVol > camVolM3) {
+            throw new IllegalStateException(
+                    "El contenedor tiene " + contVol + " m3 pero el camión solo admite " + camVolM3 + " m3");
+        }
+
+        // =============================
+        // 4) Asignar camión al tramo
+        // =============================
 
         tramo.setCamionId(camionId);
         tramo.setEstado(EstadoTramo.ASIGNADO_A_CAMION);
 
-        tramoRepository.save(tramo);
+        Tramo guardado = tramoRepository.save(tramo);
 
-        return toDTO(tramo);
+        return toDTO(guardado);
     }
 
     @Override

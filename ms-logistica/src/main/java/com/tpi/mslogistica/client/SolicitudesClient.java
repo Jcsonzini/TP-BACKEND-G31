@@ -1,6 +1,8 @@
 package com.tpi.mslogistica.client;
 
 import com.tpi.mslogistica.client.dto.FinalizarOperacionRequest;
+import com.tpi.mslogistica.client.dto.SolicitudRemotaDTO;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -11,6 +13,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 public class SolicitudesClient {
 
     private final WebClient.Builder webClientBuilder;
+
 
     @Value("${ms.solicitudes.base-url}")
     private String msSolicitudesBaseUrl;
@@ -49,6 +52,15 @@ public class SolicitudesClient {
                 .retrieve()
                 .toBodilessEntity()
                 .block();
+    }
+
+    public SolicitudRemotaDTO obtenerSolicitudPorId(Long solicitudId) {
+        return webClientBuilder.baseUrl(msSolicitudesBaseUrl).build()
+            .get()
+            .uri("/api/solicitudes/{id}", solicitudId)
+            .retrieve()
+            .bodyToMono(SolicitudRemotaDTO.class)
+            .block();
     }
 
 }

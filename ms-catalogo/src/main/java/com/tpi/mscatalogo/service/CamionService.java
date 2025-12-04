@@ -11,6 +11,8 @@ public interface CamionService {
 
     void eliminar(String patente);
 
+    CamionDTO obtenerPorId(Long id);
+
     CamionDTO obtenerPorPatente(String patente);
 
     List<CamionDTO> listar();

@@ -43,6 +43,13 @@ public class CamionController {
         return ResponseEntity.noContent().build();
     }
 
+    @GetMapping("/id/{id}")
+    @Operation(summary = "Obtener un camión por ID")
+    public ResponseEntity<CamionDTO> obtenerPorId(@PathVariable Long id) {
+        CamionDTO dto = camionService.obtenerPorId(id);
+        return ResponseEntity.ok(dto);
+    }
+
     @GetMapping("/{patente}")
     @Operation(summary = "Obtener un camión por patente")
     public ResponseEntity<CamionDTO> obtenerPorPatente(@PathVariable String patente) {

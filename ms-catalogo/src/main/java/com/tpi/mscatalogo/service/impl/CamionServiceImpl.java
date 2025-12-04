@@ -60,6 +60,14 @@ public class CamionServiceImpl implements CamionService {
 
     @Override
     @Transactional(readOnly = true)
+    public CamionDTO obtenerPorId(Long id) {
+        return camionRepository.findById(id)
+                .map(this::toDTO)
+                .orElseThrow(() -> new NoSuchElementException("Camión no encontrado con id: " + id));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public CamionDTO obtenerPorPatente(String patente) {
         return camionRepository.findByPatente(patente)
                 .map(this::toDTO)
