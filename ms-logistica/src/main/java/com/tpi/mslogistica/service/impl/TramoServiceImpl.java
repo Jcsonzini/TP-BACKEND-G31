@@ -425,10 +425,9 @@ public class TramoServiceImpl implements TramoService {
         double costoTraslado = 0.0;
         double costoEstadia = 0.0;
 
-        // 1) Costo de traslado (distancia × costoBaseKm del camión)
-        // TODO: Consultar CatalogoClient con tramo.camionId para obtener costoBaseKm real
-        double costoBaseKmCamion = 150.0; // dummy: $150/km
-        costoTraslado = distanciaKm * costoBaseKmCamion;
+        // 1) Costo de traslado (distancia × costoBaseKm de la tarifa guardada en ruta)
+        double costoBaseKm = (ruta.getCostoBaseKm() != null) ? ruta.getCostoBaseKm() : 150.0;
+        costoTraslado = distanciaKm * costoBaseKm;
 
         // 2) Costo de estadía en depósito de origen (si no es ni origen ni destino de ruta)
         // Un tramo sale de un depósito intermedio si:
@@ -440,9 +439,8 @@ public class TramoServiceImpl implements TramoService {
                 && tramo.getHorasEsperaDepositoReal() != null
                 && tramo.getHorasEsperaDepositoReal() > 0) {
 
-            // TODO: Consultar DepositoRepository por nombre/descripción para obtener costoEstadiaDiaria real
-            // Por ahora usamos un valor dummy
-            double costoEstadiaDiaria = 500.0; // dummy: $500/día
+            // Usar costoEstadiaDiaria de la tarifa guardada en la ruta
+            double costoEstadiaDiaria = (ruta.getCostoEstadiaDiaria() != null) ? ruta.getCostoEstadiaDiaria() : 500.0;
             double diasEstadia = tramo.getHorasEsperaDepositoReal() / 24.0;
             costoEstadia = diasEstadia * costoEstadiaDiaria;
         }
@@ -493,16 +491,17 @@ public class TramoServiceImpl implements TramoService {
         // Por ahora usamos la misma distancia que la estimada; cuando tengamos datos reales reemplazamos esto.
         tramo.setDistanciaKmReal(tramo.getDistanciaKmEstimada());
 
-        // Calcular costo real del tramo
-        if (tramo.getDistanciaKmReal() != null) {
+        // Calcular costo real del tramo usando la tarifa guardada en la ruta
+        if (tramo.getDistanciaKmReal() != null && tramo.getRuta() != null) {
+            Ruta ruta = tramo.getRuta();
             double distancia = tramo.getDistanciaKmReal();
-            double costoBaseKmCamion = 150.0; // dummy: $150/km
-            double costoTraslado = distancia * costoBaseKmCamion;
+            double costoBaseKm = (ruta.getCostoBaseKm() != null) ? ruta.getCostoBaseKm() : 150.0;
+            double costoTraslado = distancia * costoBaseKm;
             
             // Considerar costo de estadía en depósito si aplica
             double costoEstadia = 0.0;
             if (tramo.getHorasEsperaDepositoReal() != null && tramo.getHorasEsperaDepositoReal() > 0) {
-                double costoEstadiaDiaria = 500.0; // dummy: $500/día
+                double costoEstadiaDiaria = (ruta.getCostoEstadiaDiaria() != null) ? ruta.getCostoEstadiaDiaria() : 500.0;
                 double diasEstadia = tramo.getHorasEsperaDepositoReal() / 24.0;
                 costoEstadia = diasEstadia * costoEstadiaDiaria;
             }

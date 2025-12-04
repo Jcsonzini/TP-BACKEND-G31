@@ -5,30 +5,44 @@ spring:
   application:
     name: ms-gateway
 
+  # ========================
+  #  Seguridad - Keycloak JWT
+  # ========================
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Si el gateway corre DENTRO del mismo docker-compose que keycloak:
+          issuer-uri: http://keycloak:8080/realms/tpi-backend
+
+          # Si en algún momento ejecutás el gateway desde IntelliJ fuera de Docker,
+          # cambiás esta línea por:
+          # issuer-uri: http://localhost:8080/realms/tpi-backend
+
   cloud:
     gateway:
       mvc:
         routes:
-        - id: ms-catalogo
-          uri: http://ms-catalogo:8081
-          predicates:
-            - Path=/ms-catalogo/**
-          filters:
-            - StripPrefix=1
+          - id: ms-catalogo
+            uri: http://ms-catalogo:8081
+            predicates:
+              - Path=/ms-catalogo/**
+            filters:
+              - StripPrefix=1
 
-        - id: ms-solicitudes
-          uri: http://ms-solicitudes:8082
-          predicates:
-            - Path=/ms-solicitudes/**
-          filters:
-            - StripPrefix=1
+          - id: ms-solicitudes
+            uri: http://ms-solicitudes:8082
+            predicates:
+              - Path=/ms-solicitudes/**
+            filters:
+              - StripPrefix=1
 
-        - id: ms-logistica
-          uri: http://ms-logistica:8083
-          predicates:
-            - Path=/ms-logistica/**
-          filters:
-            - StripPrefix=1
+          - id: ms-logistica
+            uri: http://ms-logistica:8083
+            predicates:
+              - Path=/ms-logistica/**
+            filters:
+              - StripPrefix=1
 
         default-filters:
           - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials

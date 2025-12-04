@@ -71,6 +71,12 @@ public class RutaServiceImpl implements RutaService {
         ruta.setDistanciaTotalKmEstimada(distanciaKm);
         ruta.setTiempoTotalHorasEstimada(tiempoHoras);
         ruta.setCostoTotalEstimado(costoEstimado);
+        
+        // Guardar parámetros de tarifa para usar en costos reales
+        ruta.setCostoBaseKm(costoBaseKm);
+        ruta.setCostoEstadiaDiaria(request.getCostoEstadiaDiaria() != null ? request.getCostoEstadiaDiaria() : 500.0);
+        ruta.setCostoDescargaCarga(request.getCostoDescargaCarga() != null ? request.getCostoDescargaCarga() : 1000.0);
+        
         ruta.setEstado(EstadoRuta.TENTATIVA); // se confirma recién al seleccionar
         ruta.setTramos(new ArrayList<>());
 
@@ -280,6 +286,11 @@ public class RutaServiceImpl implements RutaService {
         ruta.setDestinoDireccion(destinoDesc);
         ruta.setDestinoLatitud(dLat);
         ruta.setDestinoLongitud(dLon);
+
+        // Guardar parámetros de tarifa para usar en costos reales
+        ruta.setCostoBaseKm(costoBaseKm);
+        ruta.setCostoEstadiaDiaria(costoEstadiaDiaria);
+        ruta.setCostoDescargaCarga(costoDescargaCarga);
 
         ruta.setEstado(EstadoRuta.TENTATIVA); // permanece tentativa hasta la selección
         ruta.setTramos(new ArrayList<>());

@@ -46,6 +46,11 @@ public class Ruta {
     private Double tiempoTotalHorasReal;
     private Double costoTotalReal;
 
+    // Parámetros de tarifa (guardados al crear la ruta para usar en costos reales)
+    private Double costoBaseKm;
+    private Double costoEstadiaDiaria;
+    private Double costoDescargaCarga;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private EstadoRuta estado;
