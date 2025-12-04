@@ -138,6 +138,15 @@ public class TramoServiceImpl implements TramoService {
                     "El contenedor tiene " + contVol + " m3 pero el camión solo admite " + camVolM3 + " m3");
         }
 
+        // Consideramos "ocupado" si tiene algún tramo EN_CURSO
+        boolean camionOcupado = tramoRepository.existsByCamionIdAndEstado(camionId, EstadoTramo.EN_CURSO);
+        // (si tu enum se llama INICIADO, cambialo por EstadoTramo.INICIADO)
+
+        if (camionOcupado) {
+            throw new IllegalStateException(
+                    "El camión " + camionId + " está ocupado en otro tramo en curso y no puede asignarse");
+        }
+
         // =============================
         // 4) Asignar camión al tramo
         // =============================
