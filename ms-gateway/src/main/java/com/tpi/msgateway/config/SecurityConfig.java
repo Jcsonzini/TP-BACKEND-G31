@@ -74,6 +74,11 @@ public class SecurityConfig {
                         "/ms-solicitudes/api/solicitudes/seguimiento/pendientes"
                 ).hasRole("OPERADOR")
 
+                // 6. Consultar solicitud por ID (OPERADOR)
+                .requestMatchers(HttpMethod.GET,
+                        "/ms-solicitudes/api/solicitudes/*"
+                ).hasRole("OPERADOR")
+
                 // ============================
                 //   ms-logistica (OPERADOR)
                 // ============================
@@ -81,6 +86,12 @@ public class SecurityConfig {
                 // Consultar rutas y tramos (OPERADOR)
                 .requestMatchers(HttpMethod.GET,
                         "/ms-logistica/api/rutas/**"
+                ).hasRole("OPERADOR")
+
+                // Consultar camiones libres y ocupados (OPERADOR)
+                .requestMatchers(HttpMethod.GET,
+                        "/ms-logistica/api/camiones/libres",
+                        "/ms-logistica/api/camiones/ocupados"
                 ).hasRole("OPERADOR")
 
                 // 6. Asignar camión a un tramo (OPERADOR)
