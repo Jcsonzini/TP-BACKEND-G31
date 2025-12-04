@@ -6,9 +6,11 @@ import com.tpi.mssolicitudes.domain.Solicitud;
 import com.tpi.mssolicitudes.dto.CambioEstadoSolicitudRequest;
 import com.tpi.mssolicitudes.dto.ClienteCreateRequest;
 import com.tpi.mssolicitudes.dto.ContenedorCreateRequest;
+import com.tpi.mssolicitudes.dto.ContenedorDTO;
 import com.tpi.mssolicitudes.dto.EstadoContenedor;
 import com.tpi.mssolicitudes.dto.EstadoContenedorDTO;
 import com.tpi.mssolicitudes.dto.ParametrosSistemaDTO;
+import com.tpi.mssolicitudes.dto.PromediosCamionesAptosDTO;
 import com.tpi.mssolicitudes.dto.SolicitudCreateRequest;
 import com.tpi.mssolicitudes.dto.SolicitudDTO;
 import com.tpi.mssolicitudes.dto.TramoResumenDTO;
@@ -220,6 +222,14 @@ public class SolicitudServiceImpl implements SolicitudService {
             tarifa = catalogoClient.obtenerTarifaPorDefecto();
         }
 
+        // Obtener datos del contenedor para calcular promedios de camiones aptos
+        ContenedorDTO contenedor = catalogoClient.obtenerContenedorPorCodigo(solicitud.getContenedorCodigo());
+        Double pesoContenedor = contenedor != null ? contenedor.getPesoReal() : 5000.0;  // valor por defecto
+        Double volumenContenedor = contenedor != null ? contenedor.getVolumenReal() : 33.0;  // valor por defecto
+
+        // Obtener promedios de camiones aptos para este contenedor
+        PromediosCamionesAptosDTO promedios = catalogoClient.obtenerPromediosCamionesAptos(pesoContenedor, volumenContenedor);
+
         // Armar el request para ms-logistica
         RutaCreateRequest request = new RutaCreateRequest();
         request.setSolicitudId(solicitud.getId());
@@ -230,15 +240,22 @@ public class SolicitudServiceImpl implements SolicitudService {
         request.setDestinoLatitud(solicitud.getDestinoLatitud());
         request.setDestinoLongitud(solicitud.getDestinoLongitud());
 
-        // Agregar parámetros de tarifa al request
+        // Agregar parámetros de tarifa (solo los fijos)
         if (tarifa != null) {
-            request.setCostoBaseKm(tarifa.getCostoBaseKm());
-            request.setCostoEstadiaDiaria(tarifa.getCostoEstadiaDiaria());
             request.setCostoDescargaCarga(tarifa.getCostoDescargaCarga());
             request.setCostoTolerancia(tarifa.getCostoTolerancia());
             request.setPrecioLitroCombustible(tarifa.getPrecioLitroCombustible());
-            request.setConsumoPromedioGeneral(tarifa.getConsumoPromedioGeneral());
         }
+
+        // Agregar promedios calculados de camiones aptos
+        if (promedios != null) {
+            request.setCostoBaseKmPromedio(promedios.getCostoBaseKmPromedio());
+            request.setConsumoPromedioLitrosKm(promedios.getConsumoPromedioLitrosKm());
+        }
+
+        // Agregar datos del contenedor para cálculo de estadía en depósitos
+        request.setContenedorPesoKg(pesoContenedor);
+        request.setContenedorVolumenM3(volumenContenedor);
 
         // llamada a ms-logistica usando el cliente HTTP (WebClient por adentro)
         return logisticaClient.generarRutasTentativas(request);

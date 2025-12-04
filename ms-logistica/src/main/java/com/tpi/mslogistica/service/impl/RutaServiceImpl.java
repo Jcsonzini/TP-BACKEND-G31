@@ -64,12 +64,12 @@ public class RutaServiceImpl implements RutaService {
         double distanciaKm = osrmRoute.getDistance() / 1000.0;
         double tiempoHoras = osrmRoute.getDuration() / 3600.0;
         
-        // El costoEstimado se calcula usando los parámetros de la tarifa
-        double costoBaseKm = request.getCostoBaseKm() != null ? request.getCostoBaseKm() : 150.0;
-        double precioLitroCombustible = request.getPrecioLitroCombustible() != null ? request.getPrecioLitroCombustible() : 1000.0;
-        double consumoPromedioLitrosKm = request.getConsumoPromedioGeneral() != null ? request.getConsumoPromedioGeneral() : 0.35;
+        // Usar promedios calculados de camiones aptos
+        double costoBaseKm = request.getCostoBaseKmPromedio() != null ? request.getCostoBaseKmPromedio() : 150.0;
+        double precioLitroCombustible = request.getPrecioLitroCombustible() != null ? request.getPrecioLitroCombustible() : 1200.0;
+        double consumoPromedioLitrosKm = request.getConsumoPromedioLitrosKm() != null ? request.getConsumoPromedioLitrosKm() : 0.35;
         
-        // Costo estimado = traslado base + combustible estimado (usando consumo promedio)
+        // Costo estimado = traslado base + combustible estimado (usando promedios de camiones aptos)
         double costoTraslado = distanciaKm * costoBaseKm;
         double costoCombustibleEstimado = distanciaKm * consumoPromedioLitrosKm * precioLitroCombustible;
         double costoEstimado = costoTraslado + costoCombustibleEstimado;
@@ -78,9 +78,9 @@ public class RutaServiceImpl implements RutaService {
         ruta.setTiempoTotalHorasEstimada(tiempoHoras);
         ruta.setCostoTotalEstimado(costoEstimado);
         
-        // Guardar parámetros de tarifa para usar en costos reales
-        ruta.setCostoBaseKm(costoBaseKm);
-        ruta.setCostoEstadiaDiaria(request.getCostoEstadiaDiaria() != null ? request.getCostoEstadiaDiaria() : 500.0);
+        // Guardar parámetros para usar en costos reales
+        ruta.setCostoBaseKmPromedio(costoBaseKm);
+        ruta.setConsumoPromedioLitrosKm(consumoPromedioLitrosKm);
         ruta.setCostoDescargaCarga(request.getCostoDescargaCarga() != null ? request.getCostoDescargaCarga() : 1000.0);
         ruta.setPrecioLitroCombustible(precioLitroCombustible);
         
@@ -270,11 +270,11 @@ public class RutaServiceImpl implements RutaService {
     private RutaDTO crearRutaTentativaPersistida(RutaCreateRequest request,
                                                  List<Deposito> depositosIntermedios) {
 
-        // Extraer parámetros de tarifa (con valores por defecto si no vienen)
-        double costoBaseKm = request.getCostoBaseKm() != null ? request.getCostoBaseKm() : 150.0;
-        double costoEstadiaDiaria = request.getCostoEstadiaDiaria() != null ? request.getCostoEstadiaDiaria() : 500.0;
+        // Extraer parámetros (promedios de camiones aptos, con valores por defecto si no vienen)
+        double costoBaseKm = request.getCostoBaseKmPromedio() != null ? request.getCostoBaseKmPromedio() : 150.0;
         double costoDescargaCarga = request.getCostoDescargaCarga() != null ? request.getCostoDescargaCarga() : 1000.0;
-        double precioLitroCombustible = request.getPrecioLitroCombustible() != null ? request.getPrecioLitroCombustible() : 1000.0;
+        double precioLitroCombustible = request.getPrecioLitroCombustible() != null ? request.getPrecioLitroCombustible() : 1200.0;
+        double consumoPromedioLitrosKm = request.getConsumoPromedioLitrosKm() != null ? request.getConsumoPromedioLitrosKm() : 0.35;
 
         String origenDesc = request.getOrigenDireccion();
         double oLat = request.getOrigenLatitud();
@@ -295,9 +295,9 @@ public class RutaServiceImpl implements RutaService {
         ruta.setDestinoLatitud(dLat);
         ruta.setDestinoLongitud(dLon);
 
-        // Guardar parámetros de tarifa para usar en costos reales
-        ruta.setCostoBaseKm(costoBaseKm);
-        ruta.setCostoEstadiaDiaria(costoEstadiaDiaria);
+        // Guardar parámetros para usar en costos reales
+        ruta.setCostoBaseKmPromedio(costoBaseKm);
+        ruta.setConsumoPromedioLitrosKm(consumoPromedioLitrosKm);
         ruta.setCostoDescargaCarga(costoDescargaCarga);
         ruta.setPrecioLitroCombustible(precioLitroCombustible);
 
@@ -307,31 +307,29 @@ public class RutaServiceImpl implements RutaService {
         Ruta rutaGuardada = rutaRepository.save(ruta);
 
         // Construimos la secuencia de puntos: origen -> depósitos -> destino
-        List<Punto> puntos = new ArrayList<>();
-        puntos.add(new Punto(origenDesc, oLat, oLon));
+        // Ahora cada punto también guarda el depósito asociado para obtener su costo de estadía
+        List<PuntoConDeposito> puntos = new ArrayList<>();
+        puntos.add(new PuntoConDeposito(origenDesc, oLat, oLon, null));
 
         for (Deposito dep : depositosIntermedios) {
-                puntos.add(new Punto(
-                    dep.getNombre(),
-                    dep.getLatitud().doubleValue(),
-                    dep.getLongitud().doubleValue()
-                ));
+            puntos.add(new PuntoConDeposito(
+                dep.getNombre(),
+                dep.getLatitud().doubleValue(),
+                dep.getLongitud().doubleValue(),
+                dep  // guardamos el depósito para acceder a su costoEstadiaDiaria
+            ));
         }
 
-        puntos.add(new Punto(destinoDesc, dLat, dLon));
+        puntos.add(new PuntoConDeposito(destinoDesc, dLat, dLon, null));
 
         double distanciaTotal = 0.0;
         double tiempoTotal = 0.0;
         double costoTotal = 0.0;
-        
-        // Consumo promedio estimado para el cálculo aproximado de combustible
-        // Se usa el consumoPromedioGeneral de la tarifa (promedio de camiones aptos)
-        double consumoPromedioLitrosKm = request.getConsumoPromedioGeneral() != null ? request.getConsumoPromedioGeneral() : 0.35;
 
         int orden = 1;
         for (int i = 0; i < puntos.size() - 1; i++) {
-            Punto p1 = puntos.get(i);
-            Punto p2 = puntos.get(i + 1);
+            PuntoConDeposito p1 = puntos.get(i);
+            PuntoConDeposito p2 = puntos.get(i + 1);
 
             // Llamamos a OSRM para cada tramo
             OsrmClient.OsrmRoute osrmRoute = osrmClient.route(
@@ -344,7 +342,7 @@ public class RutaServiceImpl implements RutaService {
             double distanciaKm = osrmRoute.getDistance() / 1000.0;
             double tiempoHoras = osrmRoute.getDuration() / 3600.0;
             
-            // Costo base de traslado (distancia × costoBaseKm)
+            // Costo base de traslado (distancia × costoBaseKm promedio de camiones aptos)
             double costoTraslado = distanciaKm * costoBaseKm;
             
             // Costo estimado de combustible (distancia × consumoPromedio × precioLitro)
@@ -384,23 +382,34 @@ public class RutaServiceImpl implements RutaService {
             tramo.setDistanciaKmEstimada(distanciaKm);
             tramo.setTiempoHorasEstimada(tiempoHoras);
             
-            // Calcular horas de espera estimadas y costo de estadía para depósitos intermedios
-            if (tipoTramo == com.tpi.mslogistica.domain.TipoTramo.INTERMEDIO) {
-                // Estimación: entre 4 y 10 horas de espera en depósito intermedio
+            // Calcular horas de espera estimadas y costo de estadía
+            if (tipoTramo == com.tpi.mslogistica.domain.TipoTramo.INTERMEDIO || 
+                tipoTramo == com.tpi.mslogistica.domain.TipoTramo.DESTINO) {
+                // Estimación: entre 4 y 10 horas de espera en depósito intermedio o destino
                 double horasEsperaEstimada = 4.0 + Math.random() * 6.0; // Random entre 4 y 10
                 tramo.setHorasEsperaDepositoEstimada(horasEsperaEstimada);
                 
-                // Agregar costo de estadía usando el valor de la tarifa
+                // Obtener costo de estadía del depósito destino de este tramo (p2)
+                // Si p2 tiene un depósito asociado, usamos su costoEstadiaDiaria
+                double costoEstadiaDiariaDeposito = 5000.0; // valor por defecto
+                if (p2.deposito != null && p2.deposito.getCostoEstadiaDiaria() != null) {
+                    costoEstadiaDiariaDeposito = p2.deposito.getCostoEstadiaDiaria();
+                }
+                
                 // Costo de estadía prorrateado por las horas estimadas (suponemos día = 24 horas)
-                double costoEstadiaProrrateo = (costoEstadiaDiaria / 24.0) * horasEsperaEstimada;
+                double costoEstadiaProrrateo = (costoEstadiaDiariaDeposito / 24.0) * horasEsperaEstimada;
                 costo += costoEstadiaProrrateo;
                 
-                // También agregamos costo de descarga/carga de la tarifa
-                costo += costoDescargaCarga;
+                // También agregamos costo de descarga/carga de la tarifa (solo para intermedios)
+                if (tipoTramo == com.tpi.mslogistica.domain.TipoTramo.INTERMEDIO) {
+                    costo += costoDescargaCarga;
+                    costoTotal += costoDescargaCarga;
+                }
                 
-                costoTotal += costoEstadiaProrrateo + costoDescargaCarga;
+                costoTotal += costoEstadiaProrrateo;
                 tramo.setCostoAproximado(costo);
             } else {
+                // ORIGEN: sin espera
                 tramo.setHorasEsperaDepositoEstimada(0.0);
                 tramo.setCostoAproximado(costo);
             }
@@ -430,6 +439,21 @@ public class RutaServiceImpl implements RutaService {
             this.descripcion = descripcion;
             this.latitud = latitud;
             this.longitud = longitud;
+        }
+    }
+
+    // Clase interna para manejar puntos del recorrido con referencia al depósito
+    private static class PuntoConDeposito {
+        String descripcion;
+        double latitud;
+        double longitud;
+        Deposito deposito;  // null si no es un depósito (ej: origen o destino cliente)
+
+        PuntoConDeposito(String descripcion, double latitud, double longitud, Deposito deposito) {
+            this.descripcion = descripcion;
+            this.latitud = latitud;
+            this.longitud = longitud;
+            this.deposito = deposito;
         }
     }
 

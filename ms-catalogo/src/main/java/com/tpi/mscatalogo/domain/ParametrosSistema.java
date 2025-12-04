@@ -21,14 +21,7 @@ public class ParametrosSistema {
     private String nombre;
 
     // ===== PARÁMETROS DE COSTO =====
-    // Costo base por km del transporte ($/km)
-    @Column(nullable = false)
-    private Double costoBaseKm;
-
-    // Costo de estadía diaria en depósitos ($/día)
-    @Column(nullable = false)
-    private Double costoEstadiaDiaria;
-
+    
     // Costo de descarga/carga por operación ($/operación)
     @Column(nullable = false)
     private Double costoDescargaCarga;
@@ -42,15 +35,15 @@ public class ParametrosSistema {
     @Column(nullable = false)
     private Double precioLitroCombustible;
 
-    // Consumo promedio general (litros/km) que el enunciado dice que
-    // se calcula en base al promedio de los camiones aptos
-    @Column(nullable = false)
-    private Double consumoPromedioGeneral;
-
     // ===== METADATA =====
     @Column(nullable = false)
     private Boolean activa = true;
 
     @Column(length = 255)
     private String descripcion;
+    
+    // NOTA: Los siguientes campos fueron ELIMINADOS porque ahora se calculan dinámicamente:
+    // - costoBaseKm: se calcula como promedio de los camiones aptos para el contenedor
+    // - costoEstadiaDiaria: se obtiene de cada depósito específico
+    // - consumoPromedioGeneral: se calcula como promedio de los camiones aptos para el contenedor
 }

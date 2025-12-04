@@ -65,6 +65,7 @@ public class CamionDataInitializer {
 				.transportistaTelefono("+54 9 11 5555-0003")
 				.transportistaEmail("juan.martinez@nordic.com")
 				.build(),
+			
 			Camion.builder()
 				.patente("AA003AA")
 				.modelo("Iveco Hi-Way 480")
@@ -184,6 +185,22 @@ public class CamionDataInitializer {
 				.transportistaLicencia("B2-12340567")
 				.transportistaTelefono("+54 9 11 5555-0011")
 				.transportistaEmail("eduardo.ramirez@globaltransport.com")
+				.build(),
+
+				Camion.builder()
+				.patente("BB002BB")
+				.modelo("Volvo FH 460")
+				.capacidadKg(1.0)
+				.volumenM3(1.0)
+				.consumoLitrosKm(0.315)
+				.costoBaseKm(1.0)
+				.empresaTransportista("Nordic Cargo")
+				.transportistaNombre("pedro")
+				.transportistaApellido("Martinez")
+				.transportistaDni("30123456")
+				.transportistaLicencia("B2-34567890")
+				.transportistaTelefono("+54 9 11 5555-0003")
+				.transportistaEmail("pedro.martinez@nordic.com")
 				.build()
 		);
 

@@ -18,13 +18,8 @@ public class RutaCreateRequest {
     private Double destinoLatitud;
     private Double destinoLongitud;
 
-    // ===== PARÁMETROS DE TARIFA =====
-    // Costo base por km del transporte ($/km)
-    private Double costoBaseKm;
-
-    // Costo de estadía diaria en depósitos ($/día)
-    private Double costoEstadiaDiaria;
-
+    // ===== PARÁMETROS DE TARIFA (solo los fijos) =====
+    
     // Costo de descarga/carga por operación ($/operación)
     private Double costoDescargaCarga;
 
@@ -34,6 +29,19 @@ public class RutaCreateRequest {
     // Precio actual del litro de combustible
     private Double precioLitroCombustible;
 
-    // Consumo promedio general (litros/km)
-    private Double consumoPromedioGeneral;
+    // ===== PARÁMETROS CALCULADOS (promedios de camiones aptos) =====
+    
+    // Costo base por km promedio de los camiones aptos ($/km)
+    private Double costoBaseKmPromedio;
+
+    // Consumo promedio de los camiones aptos (litros/km)
+    private Double consumoPromedioLitrosKm;
+
+    // ===== DATOS DEL CONTENEDOR (para cálculo de estadía) =====
+    
+    // Peso del contenedor en kg
+    private Double contenedorPesoKg;
+    
+    // Volumen del contenedor en m3
+    private Double contenedorVolumenM3;
 }

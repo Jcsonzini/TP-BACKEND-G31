@@ -39,6 +39,11 @@ public class TramoServiceImpl implements TramoService {
     private final DepositoRepository depositoRepository;
     private final SolicitudesClient solicitudesClient;
     private final CatalogoClient catalogoClient;
+    
+    // Multiplicador de tiempo: cada segundo real equivale a X horas simuladas
+    // Esto permite que pruebas cortas generen tiempos realistas
+    // Ej: 1800 significa que 1 segundo real = 0.5 horas (30 minutos) simuladas
+    private static final double MULTIPLICADOR_TIEMPO = 1800.0;
 
 
     @Override
@@ -338,7 +343,8 @@ public class TramoServiceImpl implements TramoService {
 
         if (tramo.getFechaInicioReal() != null && tramo.getFechaFinReal() != null) {
             Duration dur = Duration.between(tramo.getFechaInicioReal(), tramo.getFechaFinReal());
-            double horas = dur.toMinutes() / 60.0;
+            // Aplicamos multiplicador: segundos reales × multiplicador = horas simuladas
+            double horas = dur.toSeconds() * MULTIPLICADOR_TIEMPO / 3600.0;
             if (horas < 0) horas = 0.0;
             tramo.setTiempoHorasReal(horas);
         }
@@ -428,8 +434,8 @@ public class TramoServiceImpl implements TramoService {
         double costoCombustible = 0.0;
         double costoEstadia = 0.0;
 
-        // 1) Costo de traslado (distancia × costoBaseKm de la tarifa)
-        double costoBaseKm = (ruta.getCostoBaseKm() != null) ? ruta.getCostoBaseKm() : 150.0;
+        // 1) Costo de traslado (distancia × costoBaseKm promedio de camiones aptos)
+        double costoBaseKm = (ruta.getCostoBaseKmPromedio() != null) ? ruta.getCostoBaseKmPromedio() : 150.0;
         costoTraslado = distanciaKm * costoBaseKm;
 
         // 2) Costo de combustible del camión específico
@@ -471,11 +477,14 @@ public class TramoServiceImpl implements TramoService {
      * Si no se encuentra el depósito o no tiene costo configurado, usa el valor de la tarifa general.
      */
     private double obtenerCostoEstadiaDeposito(String nombreDeposito, Ruta ruta) {
+        // Valor por defecto si no se encuentra el depósito
+        double costoEstadiaPorDefecto = 5000.0;
+        
         if (nombreDeposito == null || nombreDeposito.isBlank()) {
-            return (ruta.getCostoEstadiaDiaria() != null) ? ruta.getCostoEstadiaDiaria() : 500.0;
+            return costoEstadiaPorDefecto;
         }
 
-        // Buscar el depósito por nombre
+        // Buscar el depósito por nombre para obtener SU costo de estadía específico
         Optional<Deposito> depositoOpt = depositoRepository.findByNombreContainingIgnoreCase(nombreDeposito);
         
         if (depositoOpt.isPresent()) {
@@ -485,8 +494,8 @@ public class TramoServiceImpl implements TramoService {
             }
         }
 
-        // Fallback: usar el costo de estadía de la tarifa general guardada en la ruta
-        return (ruta.getCostoEstadiaDiaria() != null) ? ruta.getCostoEstadiaDiaria() : 500.0;
+        // Fallback: usar valor por defecto (ya no hay costoEstadiaDiaria en la tarifa)
+        return costoEstadiaPorDefecto;
     }
 
 
@@ -507,7 +516,8 @@ public class TramoServiceImpl implements TramoService {
                 && esDeposito(tramo.getOrigenDescripcion())) {
 
             Duration diff = Duration.between(tramoAnterior.getFechaFinReal(), ahora);
-            double horas = diff.toMinutes() / 60.0;
+            // Aplicamos multiplicador: segundos reales × multiplicador = horas simuladas
+            double horas = diff.toSeconds() * MULTIPLICADOR_TIEMPO / 300.0;
 
             if (horas < 0) horas = 0.0;
 
@@ -524,7 +534,8 @@ public class TramoServiceImpl implements TramoService {
 
         if (tramo.getFechaInicioReal() != null) {
             Duration d = Duration.between(tramo.getFechaInicioReal(), tramo.getFechaFinReal());
-            double horas = d.toMinutes() / 60.0;
+            // Aplicamos multiplicador: segundos reales × multiplicador = horas simuladas
+            double horas = d.toSeconds() * MULTIPLICADOR_TIEMPO / 3600.0;
             if (horas < 0) horas = 0.0;
             tramo.setTiempoHorasReal(horas);
         }
@@ -537,8 +548,8 @@ public class TramoServiceImpl implements TramoService {
             Ruta ruta = tramo.getRuta();
             double distancia = tramo.getDistanciaKmReal();
             
-            // 1) Costo de traslado base
-            double costoBaseKm = (ruta.getCostoBaseKm() != null) ? ruta.getCostoBaseKm() : 150.0;
+            // 1) Costo de traslado base (usando promedio de camiones aptos)
+            double costoBaseKm = (ruta.getCostoBaseKmPromedio() != null) ? ruta.getCostoBaseKmPromedio() : 150.0;
             double costoTraslado = distancia * costoBaseKm;
             
             // 2) Costo de combustible del camión específico

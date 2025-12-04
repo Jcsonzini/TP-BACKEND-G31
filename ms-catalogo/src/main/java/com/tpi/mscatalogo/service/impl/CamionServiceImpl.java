@@ -2,6 +2,7 @@ package com.tpi.mscatalogo.service.impl;
 
 import com.tpi.mscatalogo.domain.Camion;
 import com.tpi.mscatalogo.dto.CamionDTO;
+import com.tpi.mscatalogo.dto.PromediosCamionesAptosDTO;
 import com.tpi.mscatalogo.repository.CamionRepository;
 import com.tpi.mscatalogo.service.CamionService;
 import org.springframework.stereotype.Service;
@@ -88,6 +89,44 @@ public class CamionServiceImpl implements CamionService {
                 .stream()
                 .map(this::toDTO)
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PromediosCamionesAptosDTO obtenerPromediosCamionesAptos(Double pesoKg, Double volumenM3) {
+        // Validación de parámetros
+        if (pesoKg == null || pesoKg <= 0) {
+            throw new IllegalArgumentException("El peso debe ser mayor a 0");
+        }
+        if (volumenM3 == null || volumenM3 <= 0) {
+            throw new IllegalArgumentException("El volumen debe ser mayor a 0");
+        }
+
+        // Buscar camiones aptos
+        List<Camion> camionesAptos = camionRepository.findCamionesAptos(pesoKg, volumenM3);
+
+        if (camionesAptos.isEmpty()) {
+            // Retornamos valores por defecto si no hay camiones aptos
+            return new PromediosCamionesAptosDTO(0.35, 150.0, 0);
+        }
+
+        // Calcular promedios
+        double sumaConsumo = 0.0;
+        double sumaCostoBase = 0.0;
+
+        for (Camion camion : camionesAptos) {
+            sumaConsumo += camion.getConsumoLitrosKm();
+            sumaCostoBase += camion.getCostoBaseKm();
+        }
+
+        double consumoPromedio = sumaConsumo / camionesAptos.size();
+        double costoBasePromedio = sumaCostoBase / camionesAptos.size();
+
+        return new PromediosCamionesAptosDTO(
+                consumoPromedio,
+                costoBasePromedio,
+                camionesAptos.size()
+        );
     }
 
     // ---------- Mappers ----------

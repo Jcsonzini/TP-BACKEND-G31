@@ -36,12 +36,15 @@ services:
     command:
       - start-dev
       - --http-port=8080
+      - --import-realm
     environment:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
       # opcional: si más adelante lo querés apuntar a postgres, se agregan vars KC_DB_*
     ports:
       - "8180:8080"   # EN EL HOST lo ves como http://localhost:8180
+    volumes:
+      - ./keycloak:/opt/keycloak/data/import
     depends_on:
       - postgres      # opcional, por si después lo conectás a esa base
 

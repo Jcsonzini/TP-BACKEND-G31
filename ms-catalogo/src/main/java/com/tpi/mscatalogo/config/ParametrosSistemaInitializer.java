@@ -12,6 +12,11 @@ import java.util.List;
 /**
  * Inicializa los parámetros del sistema al arrancar la aplicación.
  * Estos valores son referencias para cálculos de costo.
+ * 
+ * NOTA: Los campos costoBaseKm, costoEstadiaDiaria y consumoPromedioGeneral fueron eliminados
+ * porque ahora se calculan dinámicamente:
+ * - costoBaseKm y consumoPromedio: promedio de camiones aptos para el contenedor
+ * - costoEstadiaDiaria: se obtiene de cada depósito específico
  */
 @Component
 @RequiredArgsConstructor
@@ -30,10 +35,7 @@ public class ParametrosSistemaInitializer {
                 // 1. Tarifa Estándar Nacional
                 ParametrosSistema.builder()
                         .nombre("Tarifa Estándar Nacional")
-                        .costoBaseKm(150.0)
                         .precioLitroCombustible(1250.0)
-                        .consumoPromedioGeneral(0.314)
-                        .costoEstadiaDiaria(500.0)
                         .costoDescargaCarga(1000.0)
                         .costoTolerancia(50.0)
                         .activa(true)
@@ -43,10 +45,7 @@ public class ParametrosSistemaInitializer {
                 // 2. Tarifa Económica
                 ParametrosSistema.builder()
                         .nombre("Tarifa Económica")
-                        .costoBaseKm(120.0)
                         .precioLitroCombustible(1200.0)
-                        .consumoPromedioGeneral(0.28)
-                        .costoEstadiaDiaria(350.0)
                         .costoDescargaCarga(750.0)
                         .costoTolerancia(30.0)
                         .activa(true)
@@ -56,10 +55,7 @@ public class ParametrosSistemaInitializer {
                 // 3. Tarifa Premium Express
                 ParametrosSistema.builder()
                         .nombre("Tarifa Premium Express")
-                        .costoBaseKm(250.0)
                         .precioLitroCombustible(1350.0)
-                        .consumoPromedioGeneral(0.35)
-                        .costoEstadiaDiaria(800.0)
                         .costoDescargaCarga(1500.0)
                         .costoTolerancia(100.0)
                         .activa(true)
@@ -69,10 +65,7 @@ public class ParametrosSistemaInitializer {
                 // 4. Tarifa Larga Distancia
                 ParametrosSistema.builder()
                         .nombre("Tarifa Larga Distancia")
-                        .costoBaseKm(130.0)
                         .precioLitroCombustible(1220.0)
-                        .consumoPromedioGeneral(0.30)
-                        .costoEstadiaDiaria(600.0)
                         .costoDescargaCarga(1200.0)
                         .costoTolerancia(40.0)
                         .activa(true)
@@ -82,10 +75,7 @@ public class ParametrosSistemaInitializer {
                 // 5. Tarifa Carga Pesada
                 ParametrosSistema.builder()
                         .nombre("Tarifa Carga Pesada")
-                        .costoBaseKm(200.0)
                         .precioLitroCombustible(1300.0)
-                        .consumoPromedioGeneral(0.40)
-                        .costoEstadiaDiaria(700.0)
                         .costoDescargaCarga(2000.0)
                         .costoTolerancia(60.0)
                         .activa(true)
@@ -95,10 +85,7 @@ public class ParametrosSistemaInitializer {
                 // 6. Tarifa Refrigerado
                 ParametrosSistema.builder()
                         .nombre("Tarifa Refrigerado")
-                        .costoBaseKm(220.0)
                         .precioLitroCombustible(1400.0)
-                        .consumoPromedioGeneral(0.38)
-                        .costoEstadiaDiaria(900.0)
                         .costoDescargaCarga(1800.0)
                         .costoTolerancia(80.0)
                         .activa(true)
@@ -108,10 +95,7 @@ public class ParametrosSistemaInitializer {
                 // 7. Tarifa Materiales Peligrosos
                 ParametrosSistema.builder()
                         .nombre("Tarifa Materiales Peligrosos")
-                        .costoBaseKm(280.0)
                         .precioLitroCombustible(1350.0)
-                        .consumoPromedioGeneral(0.32)
-                        .costoEstadiaDiaria(1000.0)
                         .costoDescargaCarga(2500.0)
                         .costoTolerancia(120.0)
                         .activa(true)
@@ -121,10 +105,7 @@ public class ParametrosSistemaInitializer {
                 // 8. Tarifa Nocturna
                 ParametrosSistema.builder()
                         .nombre("Tarifa Nocturna")
-                        .costoBaseKm(180.0)
                         .precioLitroCombustible(1250.0)
-                        .consumoPromedioGeneral(0.31)
-                        .costoEstadiaDiaria(550.0)
                         .costoDescargaCarga(1300.0)
                         .costoTolerancia(70.0)
                         .activa(true)
@@ -134,10 +115,7 @@ public class ParametrosSistemaInitializer {
                 // 9. Tarifa Zona Rural
                 ParametrosSistema.builder()
                         .nombre("Tarifa Zona Rural")
-                        .costoBaseKm(170.0)
                         .precioLitroCombustible(1280.0)
-                        .consumoPromedioGeneral(0.36)
-                        .costoEstadiaDiaria(450.0)
                         .costoDescargaCarga(1100.0)
                         .costoTolerancia(45.0)
                         .activa(true)
@@ -147,10 +125,7 @@ public class ParametrosSistemaInitializer {
                 // 10. Tarifa Corporativa
                 ParametrosSistema.builder()
                         .nombre("Tarifa Corporativa")
-                        .costoBaseKm(140.0)
                         .precioLitroCombustible(1200.0)
-                        .consumoPromedioGeneral(0.31)
-                        .costoEstadiaDiaria(400.0)
                         .costoDescargaCarga(900.0)
                         .costoTolerancia(35.0)
                         .activa(true)

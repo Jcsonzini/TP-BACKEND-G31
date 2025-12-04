@@ -38,10 +38,7 @@ public class ParametrosSistemaServiceImpl implements ParametrosSistemaService {
                 .findFirst()
                 .orElse(new ParametrosSistema());
 
-        entity.setCostoBaseKm(dto.getCostoBaseKm());
         entity.setPrecioLitroCombustible(dto.getPrecioLitroCombustible());
-        entity.setConsumoPromedioGeneral(dto.getConsumoPromedioGeneral());
-        entity.setCostoEstadiaDiaria(dto.getCostoEstadiaDiaria());
         entity.setCostoDescargaCarga(dto.getCostoDescargaCarga());
         entity.setCostoTolerancia(dto.getCostoTolerancia());
         entity.setNombre(dto.getNombre() != null ? dto.getNombre() : entity.getNombre());
@@ -80,12 +77,9 @@ public class ParametrosSistemaServiceImpl implements ParametrosSistemaService {
         
         ParametrosSistema entity = new ParametrosSistema();
         entity.setNombre(dto.getNombre());
-        entity.setCostoBaseKm(dto.getCostoBaseKm() != null ? dto.getCostoBaseKm() : 150.0);
-        entity.setCostoEstadiaDiaria(dto.getCostoEstadiaDiaria() != null ? dto.getCostoEstadiaDiaria() : 500.0);
         entity.setCostoDescargaCarga(dto.getCostoDescargaCarga() != null ? dto.getCostoDescargaCarga() : 1000.0);
         entity.setCostoTolerancia(dto.getCostoTolerancia() != null ? dto.getCostoTolerancia() : 50.0);
-        entity.setPrecioLitroCombustible(dto.getPrecioLitroCombustible() != null ? dto.getPrecioLitroCombustible() : 250.0);
-        entity.setConsumoPromedioGeneral(dto.getConsumoPromedioGeneral() != null ? dto.getConsumoPromedioGeneral() : 0.08);
+        entity.setPrecioLitroCombustible(dto.getPrecioLitroCombustible() != null ? dto.getPrecioLitroCombustible() : 1200.0);
         entity.setActiva(dto.getActiva() != null ? dto.getActiva() : true);
         entity.setDescripcion(dto.getDescripcion());
 
@@ -105,12 +99,6 @@ public class ParametrosSistemaServiceImpl implements ParametrosSistemaService {
         if (dto.getNombre() != null && !dto.getNombre().isBlank()) {
             entity.setNombre(dto.getNombre());
         }
-        if (dto.getCostoBaseKm() != null) {
-            entity.setCostoBaseKm(dto.getCostoBaseKm());
-        }
-        if (dto.getCostoEstadiaDiaria() != null) {
-            entity.setCostoEstadiaDiaria(dto.getCostoEstadiaDiaria());
-        }
         if (dto.getCostoDescargaCarga() != null) {
             entity.setCostoDescargaCarga(dto.getCostoDescargaCarga());
         }
@@ -119,9 +107,6 @@ public class ParametrosSistemaServiceImpl implements ParametrosSistemaService {
         }
         if (dto.getPrecioLitroCombustible() != null) {
             entity.setPrecioLitroCombustible(dto.getPrecioLitroCombustible());
-        }
-        if (dto.getConsumoPromedioGeneral() != null) {
-            entity.setConsumoPromedioGeneral(dto.getConsumoPromedioGeneral());
         }
         if (dto.getActiva() != null) {
             entity.setActiva(dto.getActiva());
@@ -176,12 +161,9 @@ public class ParametrosSistemaServiceImpl implements ParametrosSistemaService {
         ParametrosSistemaDTO dto = new ParametrosSistemaDTO();
         dto.setId(entity.getId());
         dto.setNombre(entity.getNombre());
-        dto.setCostoBaseKm(entity.getCostoBaseKm());
-        dto.setCostoEstadiaDiaria(entity.getCostoEstadiaDiaria());
         dto.setCostoDescargaCarga(entity.getCostoDescargaCarga());
         dto.setCostoTolerancia(entity.getCostoTolerancia());
         dto.setPrecioLitroCombustible(entity.getPrecioLitroCombustible());
-        dto.setConsumoPromedioGeneral(entity.getConsumoPromedioGeneral());
         dto.setActiva(entity.getActiva());
         dto.setDescripcion(entity.getDescripcion());
         return dto;

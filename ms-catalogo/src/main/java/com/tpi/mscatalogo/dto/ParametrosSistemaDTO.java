@@ -4,12 +4,9 @@ public class ParametrosSistemaDTO {
 
     private Long id;
     private String nombre;
-    private Double costoBaseKm;
-    private Double costoEstadiaDiaria;
     private Double costoDescargaCarga;
     private Double costoTolerancia;
     private Double precioLitroCombustible;
-    private Double consumoPromedioGeneral;
     private Boolean activa;
     private String descripcion;
 
@@ -19,12 +16,6 @@ public class ParametrosSistemaDTO {
     public String getNombre() { return nombre; }
     public void setNombre(String nombre) { this.nombre = nombre; }
 
-    public Double getCostoBaseKm() { return costoBaseKm; }
-    public void setCostoBaseKm(Double costoBaseKm) { this.costoBaseKm = costoBaseKm; }
-
-    public Double getCostoEstadiaDiaria() { return costoEstadiaDiaria; }
-    public void setCostoEstadiaDiaria(Double costoEstadiaDiaria) { this.costoEstadiaDiaria = costoEstadiaDiaria; }
-
     public Double getCostoDescargaCarga() { return costoDescargaCarga; }
     public void setCostoDescargaCarga(Double costoDescargaCarga) { this.costoDescargaCarga = costoDescargaCarga; }
 
@@ -33,9 +24,6 @@ public class ParametrosSistemaDTO {
 
     public Double getPrecioLitroCombustible() { return precioLitroCombustible; }
     public void setPrecioLitroCombustible(Double precioLitroCombustible) { this.precioLitroCombustible = precioLitroCombustible; }
-
-    public Double getConsumoPromedioGeneral() { return consumoPromedioGeneral; }
-    public void setConsumoPromedioGeneral(Double consumoPromedioGeneral) { this.consumoPromedioGeneral = consumoPromedioGeneral; }
 
     public Boolean getActiva() { return activa; }
     public void setActiva(Boolean activa) { this.activa = activa; }

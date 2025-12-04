@@ -1,6 +1,7 @@
 package com.tpi.mscatalogo.web;
 
 import com.tpi.mscatalogo.dto.CamionDTO;
+import com.tpi.mscatalogo.dto.PromediosCamionesAptosDTO;
 import com.tpi.mscatalogo.service.CamionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -62,5 +63,16 @@ public class CamionController {
     public ResponseEntity<List<CamionDTO>> listar() {
         List<CamionDTO> lista = camionService.listar();
         return ResponseEntity.ok(lista);
+    }
+
+    @GetMapping("/promedios-aptos")
+    @Operation(summary = "Obtener promedios de consumo y costo base de camiones aptos para un contenedor",
+               description = "Calcula el promedio de consumo (litros/km) y costo base ($/km) de los camiones " +
+                           "que pueden transportar un contenedor con el peso y volumen especificados")
+    public ResponseEntity<PromediosCamionesAptosDTO> obtenerPromediosCamionesAptos(
+            @RequestParam Double pesoKg,
+            @RequestParam Double volumenM3) {
+        PromediosCamionesAptosDTO promedios = camionService.obtenerPromediosCamionesAptos(pesoKg, volumenM3);
+        return ResponseEntity.ok(promedios);
     }
 }
