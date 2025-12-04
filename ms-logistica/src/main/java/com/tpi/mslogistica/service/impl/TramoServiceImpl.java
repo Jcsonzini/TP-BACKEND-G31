@@ -43,7 +43,7 @@ public class TramoServiceImpl implements TramoService {
     // Multiplicador de tiempo: cada segundo real equivale a X horas simuladas
     // Esto permite que pruebas cortas generen tiempos realistas
     // Ej: 1800 significa que 1 segundo real = 0.5 horas (30 minutos) simuladas
-    private static final double MULTIPLICADOR_TIEMPO = 1800.0;
+    private static final double MULTIPLICADOR_TIEMPO = 300.0;
 
 
     @Override
@@ -517,7 +517,7 @@ public class TramoServiceImpl implements TramoService {
 
             Duration diff = Duration.between(tramoAnterior.getFechaFinReal(), ahora);
             // Aplicamos multiplicador: segundos reales × multiplicador = horas simuladas
-            double horas = diff.toSeconds() * MULTIPLICADOR_TIEMPO / 300.0;
+            double horas = diff.toSeconds() * MULTIPLICADOR_TIEMPO / 3600.0;
 
             if (horas < 0) horas = 0.0;
 
