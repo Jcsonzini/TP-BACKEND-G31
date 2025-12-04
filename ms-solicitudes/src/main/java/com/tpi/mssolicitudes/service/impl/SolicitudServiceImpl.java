@@ -211,6 +211,15 @@ public class SolicitudServiceImpl implements SolicitudService {
                     "La solicitud no tiene origen/destino completos para generar rutas");
         }
 
+        // Obtener la tarifa asociada a la solicitud
+        ParametrosSistemaDTO tarifa = null;
+        if (solicitud.getTarifaId() != null) {
+            tarifa = catalogoClient.obtenerTarifaPorId(solicitud.getTarifaId());
+        }
+        if (tarifa == null) {
+            tarifa = catalogoClient.obtenerTarifaPorDefecto();
+        }
+
         // Armar el request para ms-logistica
         RutaCreateRequest request = new RutaCreateRequest();
         request.setSolicitudId(solicitud.getId());
@@ -220,6 +229,16 @@ public class SolicitudServiceImpl implements SolicitudService {
         request.setDestinoDireccion(solicitud.getDestinoDireccion());
         request.setDestinoLatitud(solicitud.getDestinoLatitud());
         request.setDestinoLongitud(solicitud.getDestinoLongitud());
+
+        // Agregar parámetros de tarifa al request
+        if (tarifa != null) {
+            request.setCostoBaseKm(tarifa.getCostoBaseKm());
+            request.setCostoEstadiaDiaria(tarifa.getCostoEstadiaDiaria());
+            request.setCostoDescargaCarga(tarifa.getCostoDescargaCarga());
+            request.setCostoTolerancia(tarifa.getCostoTolerancia());
+            request.setPrecioLitroCombustible(tarifa.getPrecioLitroCombustible());
+            request.setConsumoPromedioGeneral(tarifa.getConsumoPromedioGeneral());
+        }
 
         // llamada a ms-logistica usando el cliente HTTP (WebClient por adentro)
         return logisticaClient.generarRutasTentativas(request);

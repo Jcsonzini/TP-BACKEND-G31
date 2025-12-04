@@ -63,10 +63,10 @@ public class RutaServiceImpl implements RutaService {
 
         double distanciaKm = osrmRoute.getDistance() / 1000.0;
         double tiempoHoras = osrmRoute.getDuration() / 3600.0;
-        // El costoEstimado se calcula como: distancia × costoBaseKm del camión
-        // TODO: Cuando se asigne un camión específico, usar su costoBaseKm real
-        // Por ahora usamos $150/km como dummy estimado
-        double costoEstimado = distanciaKm * 150.0;
+        
+        // El costoEstimado se calcula usando los parámetros de la tarifa
+        double costoBaseKm = request.getCostoBaseKm() != null ? request.getCostoBaseKm() : 150.0;
+        double costoEstimado = distanciaKm * costoBaseKm;
 
         ruta.setDistanciaTotalKmEstimada(distanciaKm);
         ruta.setTiempoTotalHorasEstimada(tiempoHoras);
@@ -164,56 +164,31 @@ public class RutaServiceImpl implements RutaService {
 
         // Ruta 1: ORIGEN → DESTINO (sin depósitos)
         if (resultado.size() < objetivo) {
-            RutaDTO r0 = crearRutaTentativaPersistida(
-                    request.getSolicitudId(),
-                    request.getOrigenDireccion(), origenLat, origenLon,
-                    Collections.emptyList(),
-                    request.getDestinoDireccion(), destinoLat, destinoLon
-            );
+            RutaDTO r0 = crearRutaTentativaPersistida(request, Collections.emptyList());
             resultado.add(r0);
         }
 
         // Ruta 2: ORIGEN → depósito más cercano → DESTINO
         if (!cercanos.isEmpty() && resultado.size() < objetivo) {
-            RutaDTO r1 = crearRutaTentativaPersistida(
-                    request.getSolicitudId(),
-                    request.getOrigenDireccion(), origenLat, origenLon,
-                    List.of(cercanos.get(0)),
-                    request.getDestinoDireccion(), request.getDestinoLatitud(), request.getDestinoLongitud()
-            );
+            RutaDTO r1 = crearRutaTentativaPersistida(request, List.of(cercanos.get(0)));
             resultado.add(r1);
         }
 
         // Ruta 3: ORIGEN → depósito segundo → DESTINO
         if (cercanos.size() > 1 && resultado.size() < objetivo) {
-            RutaDTO r2 = crearRutaTentativaPersistida(
-                    request.getSolicitudId(),
-                    request.getOrigenDireccion(), origenLat, origenLon,
-                    List.of(cercanos.get(1)),
-                    request.getDestinoDireccion(), request.getDestinoLatitud(), request.getDestinoLongitud()
-            );
+            RutaDTO r2 = crearRutaTentativaPersistida(request, List.of(cercanos.get(1)));
             resultado.add(r2);
         }
 
         // Ruta 4: ORIGEN → dep1 → dep2 → DESTINO (si hay al menos 2 depósitos)
         if (cercanos.size() > 1 && resultado.size() < objetivo) {
-            RutaDTO r3 = crearRutaTentativaPersistida(
-                    request.getSolicitudId(),
-                    request.getOrigenDireccion(), origenLat, origenLon,
-                    List.of(cercanos.get(0), cercanos.get(1)),
-                    request.getDestinoDireccion(), request.getDestinoLatitud(), request.getDestinoLongitud()
-            );
+            RutaDTO r3 = crearRutaTentativaPersistida(request, List.of(cercanos.get(0), cercanos.get(1)));
             resultado.add(r3);
         }
 
         // Ruta extra: ORIGEN → dep1 → dep3 → DESTINO (cuando hay al menos 3 depósitos y todavía falta)
         if (cercanos.size() > 2 && resultado.size() < objetivo) {
-            RutaDTO rExtra = crearRutaTentativaPersistida(
-                    request.getSolicitudId(),
-                    request.getOrigenDireccion(), origenLat, origenLon,
-                    List.of(cercanos.get(0), cercanos.get(2)),
-                    request.getDestinoDireccion(), request.getDestinoLatitud(), request.getDestinoLongitud()
-            );
+            RutaDTO rExtra = crearRutaTentativaPersistida(request, List.of(cercanos.get(0), cercanos.get(2)));
             resultado.add(rExtra);
         }
 
@@ -279,14 +254,24 @@ public class RutaServiceImpl implements RutaService {
     // =========================================================
     // IMPLEMENTACIÓN GENÉRICA PARA 1..N DEPÓSITOS
     // =========================================================
-    private RutaDTO crearRutaTentativaPersistida(Long solicitudId,
-                                                 String origenDesc, double oLat, double oLon,
-                                                 List<Deposito> depositosIntermedios,
-                                                 String destinoDesc, double dLat, double dLon) {
+    private RutaDTO crearRutaTentativaPersistida(RutaCreateRequest request,
+                                                 List<Deposito> depositosIntermedios) {
+
+        // Extraer parámetros de tarifa (con valores por defecto si no vienen)
+        double costoBaseKm = request.getCostoBaseKm() != null ? request.getCostoBaseKm() : 150.0;
+        double costoEstadiaDiaria = request.getCostoEstadiaDiaria() != null ? request.getCostoEstadiaDiaria() : 500.0;
+        double costoDescargaCarga = request.getCostoDescargaCarga() != null ? request.getCostoDescargaCarga() : 1000.0;
+
+        String origenDesc = request.getOrigenDireccion();
+        double oLat = request.getOrigenLatitud();
+        double oLon = request.getOrigenLongitud();
+        String destinoDesc = request.getDestinoDireccion();
+        double dLat = request.getDestinoLatitud();
+        double dLon = request.getDestinoLongitud();
 
         // 1) Crear Ruta base
         Ruta ruta = new Ruta();
-        ruta.setSolicitudId(solicitudId);
+        ruta.setSolicitudId(request.getSolicitudId());
 
         ruta.setOrigenDireccion(origenDesc);
         ruta.setOrigenLatitud(oLat);
@@ -334,7 +319,8 @@ public class RutaServiceImpl implements RutaService {
 
             double distanciaKm = osrmRoute.getDistance() / 1000.0;
             double tiempoHoras = osrmRoute.getDuration() / 3600.0;
-            double costo = distanciaKm * 150.0; // costo dummy
+            // Costo calculado usando el costoBaseKm de la tarifa
+            double costo = distanciaKm * costoBaseKm;
 
             distanciaTotal += distanciaKm;
             tiempoTotal += tiempoHoras;
@@ -369,21 +355,19 @@ public class RutaServiceImpl implements RutaService {
             
             // Calcular horas de espera estimadas y costo de estadía para depósitos intermedios
             if (tipoTramo == com.tpi.mslogistica.domain.TipoTramo.INTERMEDIO) {
-                // Estimación: 1 hora de espera en depósito intermedio
-                tramo.setHorasEsperaDepositoEstimada(1.0);
+                // Estimación: entre 4 y 10 horas de espera en depósito intermedio
+                double horasEsperaEstimada = 4.0 + Math.random() * 6.0; // Random entre 4 y 10
+                tramo.setHorasEsperaDepositoEstimada(horasEsperaEstimada);
                 
-                // Agregar costo de estadía del depósito de destino (depósito intermedio)
-                // Obtener el depósito que corresponde a este tramo
-                Deposito depositoDestino = depositosIntermedios.stream()
-                    .filter(d -> d.getNombre().equals(p2.descripcion))
-                    .findFirst()
-                    .orElse(null);
+                // Agregar costo de estadía usando el valor de la tarifa
+                // Costo de estadía prorrateado por las horas estimadas (suponemos día = 24 horas)
+                double costoEstadiaProrrateo = (costoEstadiaDiaria / 24.0) * horasEsperaEstimada;
+                costo += costoEstadiaProrrateo;
                 
-                if (depositoDestino != null) {
-                    // Costo de estadía prorrateado por 1 hora (suponemos día = 24 horas)
-                    double costoEstadiaProrrateo = (depositoDestino.getCostoEstadiaDiaria() / 24.0) * 1.0;
-                    costo += costoEstadiaProrrateo;
-                }
+                // También agregamos costo de descarga/carga de la tarifa
+                costo += costoDescargaCarga;
+                
+                costoTotal += costoEstadiaProrrateo + costoDescargaCarga;
                 tramo.setCostoAproximado(costo);
             } else {
                 tramo.setHorasEsperaDepositoEstimada(0.0);
