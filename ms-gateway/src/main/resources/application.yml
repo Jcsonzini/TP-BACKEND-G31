@@ -12,12 +12,9 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          # Si el gateway corre DENTRO del mismo docker-compose que keycloak:
-          issuer-uri: http://keycloak:8080/realms/tpi-backend
-
-          # Si en algún momento ejecutás el gateway desde IntelliJ fuera de Docker,
-          # cambiás esta línea por:
-          # issuer-uri: http://localhost:8080/realms/tpi-backend
+          # Usamos jwk-set-uri para obtener las claves públicas
+          # y evitar el problema de issuer mismatch entre localhost y keycloak (Docker)
+          jwk-set-uri: http://keycloak:8080/realms/tpi-backend/protocol/openid-connect/certs
 
   cloud:
     gateway:
