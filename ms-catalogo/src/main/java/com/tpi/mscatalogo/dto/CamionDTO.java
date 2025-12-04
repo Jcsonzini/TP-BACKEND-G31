@@ -21,6 +21,14 @@ public class CamionDTO {
     // Empresa transportista
     private String empresaTransportista;
 
+    // Datos del transportista (chofer)
+    private String transportistaNombre;
+    private String transportistaApellido;
+    private String transportistaDni;
+    private String transportistaLicencia;
+    private String transportistaTelefono;
+    private String transportistaEmail;
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -44,4 +52,22 @@ public class CamionDTO {
 
     public String getEmpresaTransportista() { return empresaTransportista; }
     public void setEmpresaTransportista(String empresaTransportista) { this.empresaTransportista = empresaTransportista; }
+
+    public String getTransportistaNombre() { return transportistaNombre; }
+    public void setTransportistaNombre(String transportistaNombre) { this.transportistaNombre = transportistaNombre; }
+
+    public String getTransportistaApellido() { return transportistaApellido; }
+    public void setTransportistaApellido(String transportistaApellido) { this.transportistaApellido = transportistaApellido; }
+
+    public String getTransportistaDni() { return transportistaDni; }
+    public void setTransportistaDni(String transportistaDni) { this.transportistaDni = transportistaDni; }
+
+    public String getTransportistaLicencia() { return transportistaLicencia; }
+    public void setTransportistaLicencia(String transportistaLicencia) { this.transportistaLicencia = transportistaLicencia; }
+
+    public String getTransportistaTelefono() { return transportistaTelefono; }
+    public void setTransportistaTelefono(String transportistaTelefono) { this.transportistaTelefono = transportistaTelefono; }
+
+    public String getTransportistaEmail() { return transportistaEmail; }
+    public void setTransportistaEmail(String transportistaEmail) { this.transportistaEmail = transportistaEmail; }
 }

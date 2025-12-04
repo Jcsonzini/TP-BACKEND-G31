@@ -45,6 +45,13 @@ public class CamionServiceImpl implements CamionService {
         entity.setConsumoLitrosKm(dto.getConsumoLitrosKm());
         entity.setCostoBaseKm(dto.getCostoBaseKm());
         entity.setEmpresaTransportista(dto.getEmpresaTransportista());
+        // Datos del transportista
+        entity.setTransportistaNombre(dto.getTransportistaNombre());
+        entity.setTransportistaApellido(dto.getTransportistaApellido());
+        entity.setTransportistaDni(dto.getTransportistaDni());
+        entity.setTransportistaLicencia(dto.getTransportistaLicencia());
+        entity.setTransportistaTelefono(dto.getTransportistaTelefono());
+        entity.setTransportistaEmail(dto.getTransportistaEmail());
 
         entity = camionRepository.save(entity);
         return toDTO(entity);
@@ -95,6 +102,13 @@ public class CamionServiceImpl implements CamionService {
         dto.setConsumoLitrosKm(entity.getConsumoLitrosKm());
         dto.setCostoBaseKm(entity.getCostoBaseKm());
         dto.setEmpresaTransportista(entity.getEmpresaTransportista());
+        // Datos del transportista
+        dto.setTransportistaNombre(entity.getTransportistaNombre());
+        dto.setTransportistaApellido(entity.getTransportistaApellido());
+        dto.setTransportistaDni(entity.getTransportistaDni());
+        dto.setTransportistaLicencia(entity.getTransportistaLicencia());
+        dto.setTransportistaTelefono(entity.getTransportistaTelefono());
+        dto.setTransportistaEmail(entity.getTransportistaEmail());
         return dto;
     }
 
@@ -108,6 +122,13 @@ public class CamionServiceImpl implements CamionService {
         entity.setConsumoLitrosKm(dto.getConsumoLitrosKm());
         entity.setCostoBaseKm(dto.getCostoBaseKm());
         entity.setEmpresaTransportista(dto.getEmpresaTransportista());
+        // Datos del transportista
+        entity.setTransportistaNombre(dto.getTransportistaNombre());
+        entity.setTransportistaApellido(dto.getTransportistaApellido());
+        entity.setTransportistaDni(dto.getTransportistaDni());
+        entity.setTransportistaLicencia(dto.getTransportistaLicencia());
+        entity.setTransportistaTelefono(dto.getTransportistaTelefono());
+        entity.setTransportistaEmail(dto.getTransportistaEmail());
         return entity;
     }
 }

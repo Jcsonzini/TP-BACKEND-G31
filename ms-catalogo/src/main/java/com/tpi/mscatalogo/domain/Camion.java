@@ -38,7 +38,27 @@ public class Camion {
     @Column(nullable = false)
     private Double costoBaseKm;
 
-    // Empresa transportista a la que pertenece (texto simple, si no querés otra entidad)
+    // Empresa transportista a la que pertenece
     @Column(length = 120)
     private String empresaTransportista;
+
+    // ===== DATOS DEL TRANSPORTISTA (CHOFER) =====
+    
+    @Column(length = 80)
+    private String transportistaNombre;
+
+    @Column(length = 80)
+    private String transportistaApellido;
+
+    @Column(length = 15)
+    private String transportistaDni;
+
+    @Column(length = 30)
+    private String transportistaLicencia;  // Número de licencia de conducir
+
+    @Column(length = 100)
+    private String transportistaTelefono;
+
+    @Column(length = 150)
+    private String transportistaEmail;
 }
