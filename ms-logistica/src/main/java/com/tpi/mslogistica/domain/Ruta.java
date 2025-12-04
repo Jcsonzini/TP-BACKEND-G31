@@ -50,6 +50,7 @@ public class Ruta {
     private Double costoBaseKm;
     private Double costoEstadiaDiaria;
     private Double costoDescargaCarga;
+    private Double precioLitroCombustible;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)

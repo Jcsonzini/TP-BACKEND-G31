@@ -6,6 +6,7 @@ import com.tpi.mslogistica.client.dto.CamionRemotoDTO;
 import com.tpi.mslogistica.client.dto.ContenedorRemotoDTO;
 import com.tpi.mslogistica.client.dto.FinalizarOperacionRequest;
 import com.tpi.mslogistica.client.dto.SolicitudRemotaDTO;
+import com.tpi.mslogistica.domain.Deposito;
 import com.tpi.mslogistica.domain.EstadoRuta;
 import com.tpi.mslogistica.domain.EstadoTramo;
 import com.tpi.mslogistica.domain.Ruta;
@@ -14,6 +15,7 @@ import com.tpi.mslogistica.domain.TipoTramo;
 import com.tpi.mslogistica.dto.AsignarCamionTramoRequest;
 import com.tpi.mslogistica.dto.CambioEstadoTramoRequest;
 import com.tpi.mslogistica.dto.TramoDTO;
+import com.tpi.mslogistica.repository.DepositoRepository;
 import com.tpi.mslogistica.repository.RutaRepository;
 import com.tpi.mslogistica.repository.TramoRepository;
 import com.tpi.mslogistica.service.TramoService;
@@ -26,6 +28,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -33,6 +36,7 @@ public class TramoServiceImpl implements TramoService {
 
     private final TramoRepository tramoRepository;
     private final RutaRepository rutaRepository;
+    private final DepositoRepository depositoRepository;
     private final SolicitudesClient solicitudesClient;
     private final CatalogoClient catalogoClient;
 
@@ -414,38 +418,75 @@ public class TramoServiceImpl implements TramoService {
     }
 
     /**
-     * Calcula el costo real de un tramo:
-     * = Costo de traslado (distancia × costoBaseKm del camión)
-     *   + Costo de estadía en depósito de origen (si es un depósito intermedio)
-     *
-     * NOTA: Para este MVP se usa costoBase = 150 $/km (dummy).
-     * En producción, consultar ms-catalogo para obtener los valores reales del camión.
+     * Calcula el costo real de un tramo según el enunciado:
+     * = Costo de traslado (distancia × costoBaseKm)
+     *   + Costo de combustible (distancia × consumoLitrosKm del camión × precioLitroCombustible)
+     *   + Costo de estadía en depósito de origen (usando el costo específico del depósito)
      */
     private double calcularCostoTramoReal(Tramo tramo, Ruta ruta, double distanciaKm) {
         double costoTraslado = 0.0;
+        double costoCombustible = 0.0;
         double costoEstadia = 0.0;
 
-        // 1) Costo de traslado (distancia × costoBaseKm de la tarifa guardada en ruta)
+        // 1) Costo de traslado (distancia × costoBaseKm de la tarifa)
         double costoBaseKm = (ruta.getCostoBaseKm() != null) ? ruta.getCostoBaseKm() : 150.0;
         costoTraslado = distanciaKm * costoBaseKm;
 
-        // 2) Costo de estadía en depósito de origen (si no es ni origen ni destino de ruta)
-        // Un tramo sale de un depósito intermedio si:
-        //   - No es el primer tramo (orden > 1)
-        //   - La descripción del origen contiene "depósito"
-        //   - Hay tiempo real de espera registrado
+        // 2) Costo de combustible del camión específico
+        // Fórmula: distancia × consumoLitrosKm (del camión) × precioLitroCombustible (de la tarifa)
+        if (tramo.getCamionId() != null) {
+            try {
+                CamionRemotoDTO camion = catalogoClient.obtenerCamionPorId(tramo.getCamionId());
+                if (camion != null && camion.getConsumoLitrosKm() != null) {
+                    double consumoLitrosKm = camion.getConsumoLitrosKm();
+                    double precioLitro = (ruta.getPrecioLitroCombustible() != null) ? ruta.getPrecioLitroCombustible() : 1000.0;
+                    costoCombustible = distanciaKm * consumoLitrosKm * precioLitro;
+                }
+            } catch (Exception e) {
+                // Si no se puede obtener el camión, usar un valor estimado
+                double precioLitro = (ruta.getPrecioLitroCombustible() != null) ? ruta.getPrecioLitroCombustible() : 1000.0;
+                double consumoPromedio = 0.35; // 0.35 litros/km como fallback
+                costoCombustible = distanciaKm * consumoPromedio * precioLitro;
+            }
+        }
+
+        // 3) Costo de estadía en depósito de origen (si es un depósito intermedio)
+        // Usa el costo de estadía del depósito específico, no el de la tarifa general
         if (tramo.getOrden() != null && tramo.getOrden() > 1
                 && esDeposito(tramo.getOrigenDescripcion())
                 && tramo.getHorasEsperaDepositoReal() != null
                 && tramo.getHorasEsperaDepositoReal() > 0) {
 
-            // Usar costoEstadiaDiaria de la tarifa guardada en la ruta
-            double costoEstadiaDiaria = (ruta.getCostoEstadiaDiaria() != null) ? ruta.getCostoEstadiaDiaria() : 500.0;
+            // Buscar el depósito específico para obtener SU costo de estadía
+            double costoEstadiaDiaria = obtenerCostoEstadiaDeposito(tramo.getOrigenDescripcion(), ruta);
             double diasEstadia = tramo.getHorasEsperaDepositoReal() / 24.0;
             costoEstadia = diasEstadia * costoEstadiaDiaria;
         }
 
-        return costoTraslado + costoEstadia;
+        return costoTraslado + costoCombustible + costoEstadia;
+    }
+
+    /**
+     * Obtiene el costo de estadía diaria del depósito específico.
+     * Si no se encuentra el depósito o no tiene costo configurado, usa el valor de la tarifa general.
+     */
+    private double obtenerCostoEstadiaDeposito(String nombreDeposito, Ruta ruta) {
+        if (nombreDeposito == null || nombreDeposito.isBlank()) {
+            return (ruta.getCostoEstadiaDiaria() != null) ? ruta.getCostoEstadiaDiaria() : 500.0;
+        }
+
+        // Buscar el depósito por nombre
+        Optional<Deposito> depositoOpt = depositoRepository.findByNombreContainingIgnoreCase(nombreDeposito);
+        
+        if (depositoOpt.isPresent()) {
+            Deposito deposito = depositoOpt.get();
+            if (deposito.getCostoEstadiaDiaria() != null && deposito.getCostoEstadiaDiaria() > 0) {
+                return deposito.getCostoEstadiaDiaria();
+            }
+        }
+
+        // Fallback: usar el costo de estadía de la tarifa general guardada en la ruta
+        return (ruta.getCostoEstadiaDiaria() != null) ? ruta.getCostoEstadiaDiaria() : 500.0;
     }
 
 
@@ -491,22 +532,42 @@ public class TramoServiceImpl implements TramoService {
         // Por ahora usamos la misma distancia que la estimada; cuando tengamos datos reales reemplazamos esto.
         tramo.setDistanciaKmReal(tramo.getDistanciaKmEstimada());
 
-        // Calcular costo real del tramo usando la tarifa guardada en la ruta
+        // Calcular costo real del tramo incluyendo: traslado + combustible + estadía
         if (tramo.getDistanciaKmReal() != null && tramo.getRuta() != null) {
             Ruta ruta = tramo.getRuta();
             double distancia = tramo.getDistanciaKmReal();
+            
+            // 1) Costo de traslado base
             double costoBaseKm = (ruta.getCostoBaseKm() != null) ? ruta.getCostoBaseKm() : 150.0;
             double costoTraslado = distancia * costoBaseKm;
             
-            // Considerar costo de estadía en depósito si aplica
+            // 2) Costo de combustible del camión específico
+            double costoCombustible = 0.0;
+            if (tramo.getCamionId() != null) {
+                try {
+                    CamionRemotoDTO camion = catalogoClient.obtenerCamionPorId(tramo.getCamionId());
+                    if (camion != null && camion.getConsumoLitrosKm() != null) {
+                        double consumoLitrosKm = camion.getConsumoLitrosKm();
+                        double precioLitro = (ruta.getPrecioLitroCombustible() != null) ? ruta.getPrecioLitroCombustible() : 1000.0;
+                        costoCombustible = distancia * consumoLitrosKm * precioLitro;
+                    }
+                } catch (Exception e) {
+                    // Fallback si no se puede obtener el camión
+                    double precioLitro = (ruta.getPrecioLitroCombustible() != null) ? ruta.getPrecioLitroCombustible() : 1000.0;
+                    costoCombustible = distancia * 0.35 * precioLitro; // 0.35 l/km promedio
+                }
+            }
+            
+            // 3) Costo de estadía en depósito (usando costo del depósito específico)
             double costoEstadia = 0.0;
-            if (tramo.getHorasEsperaDepositoReal() != null && tramo.getHorasEsperaDepositoReal() > 0) {
-                double costoEstadiaDiaria = (ruta.getCostoEstadiaDiaria() != null) ? ruta.getCostoEstadiaDiaria() : 500.0;
+            if (tramo.getHorasEsperaDepositoReal() != null && tramo.getHorasEsperaDepositoReal() > 0
+                    && esDeposito(tramo.getOrigenDescripcion())) {
+                double costoEstadiaDiaria = obtenerCostoEstadiaDeposito(tramo.getOrigenDescripcion(), ruta);
                 double diasEstadia = tramo.getHorasEsperaDepositoReal() / 24.0;
                 costoEstadia = diasEstadia * costoEstadiaDiaria;
             }
             
-            tramo.setCostoReal(costoTraslado + costoEstadia);
+            tramo.setCostoReal(costoTraslado + costoCombustible + costoEstadia);
         }
     }
 

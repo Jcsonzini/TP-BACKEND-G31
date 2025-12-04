@@ -66,7 +66,13 @@ public class RutaServiceImpl implements RutaService {
         
         // El costoEstimado se calcula usando los parámetros de la tarifa
         double costoBaseKm = request.getCostoBaseKm() != null ? request.getCostoBaseKm() : 150.0;
-        double costoEstimado = distanciaKm * costoBaseKm;
+        double precioLitroCombustible = request.getPrecioLitroCombustible() != null ? request.getPrecioLitroCombustible() : 1000.0;
+        double consumoPromedioLitrosKm = request.getConsumoPromedioGeneral() != null ? request.getConsumoPromedioGeneral() : 0.35;
+        
+        // Costo estimado = traslado base + combustible estimado (usando consumo promedio)
+        double costoTraslado = distanciaKm * costoBaseKm;
+        double costoCombustibleEstimado = distanciaKm * consumoPromedioLitrosKm * precioLitroCombustible;
+        double costoEstimado = costoTraslado + costoCombustibleEstimado;
 
         ruta.setDistanciaTotalKmEstimada(distanciaKm);
         ruta.setTiempoTotalHorasEstimada(tiempoHoras);
@@ -76,6 +82,7 @@ public class RutaServiceImpl implements RutaService {
         ruta.setCostoBaseKm(costoBaseKm);
         ruta.setCostoEstadiaDiaria(request.getCostoEstadiaDiaria() != null ? request.getCostoEstadiaDiaria() : 500.0);
         ruta.setCostoDescargaCarga(request.getCostoDescargaCarga() != null ? request.getCostoDescargaCarga() : 1000.0);
+        ruta.setPrecioLitroCombustible(precioLitroCombustible);
         
         ruta.setEstado(EstadoRuta.TENTATIVA); // se confirma recién al seleccionar
         ruta.setTramos(new ArrayList<>());
@@ -267,6 +274,7 @@ public class RutaServiceImpl implements RutaService {
         double costoBaseKm = request.getCostoBaseKm() != null ? request.getCostoBaseKm() : 150.0;
         double costoEstadiaDiaria = request.getCostoEstadiaDiaria() != null ? request.getCostoEstadiaDiaria() : 500.0;
         double costoDescargaCarga = request.getCostoDescargaCarga() != null ? request.getCostoDescargaCarga() : 1000.0;
+        double precioLitroCombustible = request.getPrecioLitroCombustible() != null ? request.getPrecioLitroCombustible() : 1000.0;
 
         String origenDesc = request.getOrigenDireccion();
         double oLat = request.getOrigenLatitud();
@@ -291,6 +299,7 @@ public class RutaServiceImpl implements RutaService {
         ruta.setCostoBaseKm(costoBaseKm);
         ruta.setCostoEstadiaDiaria(costoEstadiaDiaria);
         ruta.setCostoDescargaCarga(costoDescargaCarga);
+        ruta.setPrecioLitroCombustible(precioLitroCombustible);
 
         ruta.setEstado(EstadoRuta.TENTATIVA); // permanece tentativa hasta la selección
         ruta.setTramos(new ArrayList<>());
@@ -314,6 +323,10 @@ public class RutaServiceImpl implements RutaService {
         double distanciaTotal = 0.0;
         double tiempoTotal = 0.0;
         double costoTotal = 0.0;
+        
+        // Consumo promedio estimado para el cálculo aproximado de combustible
+        // Se usa el consumoPromedioGeneral de la tarifa (promedio de camiones aptos)
+        double consumoPromedioLitrosKm = request.getConsumoPromedioGeneral() != null ? request.getConsumoPromedioGeneral() : 0.35;
 
         int orden = 1;
         for (int i = 0; i < puntos.size() - 1; i++) {
@@ -330,8 +343,15 @@ public class RutaServiceImpl implements RutaService {
 
             double distanciaKm = osrmRoute.getDistance() / 1000.0;
             double tiempoHoras = osrmRoute.getDuration() / 3600.0;
-            // Costo calculado usando el costoBaseKm de la tarifa
-            double costo = distanciaKm * costoBaseKm;
+            
+            // Costo base de traslado (distancia × costoBaseKm)
+            double costoTraslado = distanciaKm * costoBaseKm;
+            
+            // Costo estimado de combustible (distancia × consumoPromedio × precioLitro)
+            double costoCombustibleEstimado = distanciaKm * consumoPromedioLitrosKm * precioLitroCombustible;
+            
+            // Costo total del tramo = traslado + combustible
+            double costo = costoTraslado + costoCombustibleEstimado;
 
             distanciaTotal += distanciaKm;
             tiempoTotal += tiempoHoras;

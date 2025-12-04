@@ -2,6 +2,7 @@ package com.tpi.mslogistica.client;
 
 import com.tpi.mslogistica.client.dto.CamionRemotoDTO;
 import com.tpi.mslogistica.client.dto.ContenedorRemotoDTO;
+import com.tpi.mslogistica.client.dto.TarifaRemotaDTO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -43,6 +44,18 @@ public class CatalogoClient {
                 .retrieve()
                 .bodyToFlux(CamionRemotoDTO.class)
                 .collectList()
+                .block();
+    }
+
+    /**
+     * Obtiene la tarifa actual del sistema (parámetros de costo)
+     */
+    public TarifaRemotaDTO obtenerTarifaActual() {
+        return webClientBuilder.baseUrl(catalogoBaseUrl).build()
+                .get()
+                .uri("/api/parametros-sistema/actual")
+                .retrieve()
+                .bodyToMono(TarifaRemotaDTO.class)
                 .block();
     }
 
